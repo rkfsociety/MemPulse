@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: mempulse-release-GH(github.ref)
+  group: mempulse-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -32,8 +32,8 @@ jobs:
       - name: Validate release version and commit
         shell: pwsh
         env:
-          INPUT_VERSION: GH(inputs.version)
-          EVENT_NAME: GH(github.event_name)
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           $tag = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:GITHUB_REF_NAME }
           if ($tag -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
@@ -69,7 +69,7 @@ jobs:
       - name: Create GitHub Release with installer and portable app
         shell: pwsh
         env:
-          GH_TOKEN: GH(github.token)
+          GH_TOKEN: ${{ github.token }}
         run: |
           $existing = gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) { throw "Release $env:TAG already exists. Refusing overwrite." }

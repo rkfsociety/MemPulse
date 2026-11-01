@@ -16,6 +16,7 @@ namespace MemPulse;
 public partial class MainWindow : Window
 {
     private readonly MonitoringService _monitor = new();
+    private readonly ProcessIconCache _processIcons = new();
     private readonly CleanupService _cleaner = new();
     private readonly SettingsStore _store = new();
     private readonly UpdateService _updates = new();
@@ -178,7 +179,12 @@ public partial class MainWindow : Window
         _refreshing = true;
         try
         {
-            var result = await Task.Run(() => (_monitor.ReadMemory(), _monitor.ReadProcesses()));
+            var result = await Task.Run(() =>
+            {
+                var usage = _monitor.ReadMemory();
+                var snapshot = _monitor.ReadProcesses();
+                return (usage, _processIcons.Decorate(snapshot));
+            });
             var memory = result.Item1;
             var processes = result.Item2;
 
@@ -186,6 +192,10 @@ public partial class MainWindow : Window
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
             TotalText.Text = Format.Bytes(memory.Total) + " всего";
             UpdateMemoryVisual(memory.UsedPercent);
+            SideUsageText.Text = memory.UsedPercent.ToString("0") + "%";
+            SideUsageBar.Value = memory.UsedPercent;
+            CommitBar.Value = memory.CommitLimit == 0 ? 0 :
+                Math.Clamp((double)memory.Committed / memory.CommitLimit * 100, 0, 100);
             UpdateTray(memory);
             AvailableText.Text = Format.Bytes(memory.Available);
             CacheText.Text = Format.Bytes(memory.Cache);
@@ -193,8 +203,12 @@ public partial class MainWindow : Window
             LimitText.Text = Format.Bytes(memory.CommitLimit);
 
             int? selectedPid = (ProcessGrid.SelectedItem as ProcessUsage)?.Pid;
-            _processes.Clear();
-            foreach (var row in processes) _processes.Add(row);
+            // Batch refresh to avoid re-sorting the view for every individual row.
+            using (CollectionViewSource.GetDefaultView(_processes).DeferRefresh())
+            {
+                _processes.Clear();
+                foreach (var row in processes) _processes.Add(row);
+            }
             if (selectedPid.HasValue)
                 ProcessGrid.SelectedItem = _processes.FirstOrDefault(row => row.Pid == selectedPid.Value);
             ProcessCountText.Text = RussianText.Processes(processes.Count) + " · память процессов";
@@ -542,10 +556,23 @@ public partial class MainWindow : Window
         double height = HistoryCanvas.ActualHeight;
         if (width <= 1 || height <= 1 || _memoryHistory.Count == 0) return;
 
+        // Axis range is explicitly shown: the history is scaled to real recent samples.
+        double minimum = _memoryHistory.Min();
+        double maximum = _memoryHistory.Max();
+        double padding = Math.Max(3, (maximum - minimum) * 0.25);
+        double low = Math.Max(0, Math.Floor(minimum - padding));
+        double high = Math.Min(100, Math.Ceiling(maximum + padding));
+        if (high - low < 4)
+        {
+            low = Math.Max(0, minimum - 2);
+            high = Math.Min(100, maximum + 2);
+        }
+        HistoryRangeText.Text = $"Шкала {low:0.#}–{high:0.#}%";
+        double span = Math.Max(0.001, high - low);
         var points = new System.Windows.Media.PointCollection();
         if (_memoryHistory.Count == 1)
         {
-            double y = height * (1 - _memoryHistory[0] / 100.0);
+            double y = height * (1 - (_memoryHistory[0] - low) / span);
             points.Add(new System.Windows.Point(0, y));
             points.Add(new System.Windows.Point(width, y));
         }
@@ -554,10 +581,14 @@ public partial class MainWindow : Window
             for (int i = 0; i < _memoryHistory.Count; i++)
             {
                 double x = i * width / (_memoryHistory.Count - 1);
-                double y = height * (1 - _memoryHistory[i] / 100.0);
+                double y = height * (1 - (_memoryHistory[i] - low) / span);
                 points.Add(new System.Windows.Point(x, Math.Clamp(y, 0, height)));
             }
         }
+        var last = points[^1];
+        System.Windows.Controls.Canvas.SetLeft(HistoryDot, last.X - HistoryDot.Width / 2);
+        System.Windows.Controls.Canvas.SetTop(HistoryDot, last.Y - HistoryDot.Height / 2);
+        HistoryDot.Visibility = Visibility.Visible;
         HistoryLine.Points = points;
         var filled = new System.Windows.Media.PointCollection
         {

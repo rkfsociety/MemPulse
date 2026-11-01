@@ -20,6 +20,20 @@ jobs:
         run: dotnet run --project tests/MemPulse.IconTests/MemPulse.IconTests.csproj --configuration Release
       - name: Publish portable Windows x64
         run: dotnet publish src/MemPulse/MemPulse.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish
+      - name: Test packaged EXE startup (WPF/XAML/icons)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'publish/MemPulse.exe').Path
+          $process = Start-Process -FilePath $exe -ArgumentList '--startup-smoke-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged MemPulse startup failed: $($process.ExitCode)" }
+          $logDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'MemPulse\Logs'
+          $latest = Get-ChildItem $logDir -Filter 'startup-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $latest -or -not (Select-String -Path $latest.FullName -Pattern 'Проверка создания главного окна пройдена' -Quiet)) {
+            throw "Packaged startup succeeded but no startup success marker was recorded."
+          }
+          Write-Host "PASS: Packaged MemPulse starts, initializes WPF and writes startup diagnostics."
       - name: Build per-user installer
         shell: pwsh
         run: |

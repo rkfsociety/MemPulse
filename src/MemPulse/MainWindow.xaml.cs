@@ -48,19 +48,34 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        StartupLog.Info("Главное окно: событие Loaded");
         _settings = _store.Load();
+        StartupLog.Info("Главное окно: настройки загружены");
         try { _settings.StartWithWindows = StartupService.IsEnabled(); }
         catch (Exception ex) { SetStatus("Не удалось прочитать автозапуск: " + ex.Message); }
 
         ElevateButton.Visibility = CleanupService.IsElevated ? Visibility.Collapsed : Visibility.Visible;
         CleanButton.IsEnabled = CleanupService.IsElevated;
-        InitializeTray();
+        try
+        {
+            InitializeTray();
+            StartupLog.Info("Главное окно: трей инициализирован");
+        }
+        catch (Exception ex)
+        {
+            // Notification area support is optional; never prevent the main window from appearing.
+            StartupLog.Error("Не удалось создать значок трея", ex);
+            SetStatus("Не удалось создать значок трея: " + ex.Message);
+        }
         ConfigureTimer();
+        StartupLog.Info("Главное окно: таймер запущен");
         if (CleanupService.IsElevated) SetStatus("Режим администратора · очистка доступна");
         else SetStatus("Мониторинг включён · для системной очистки нужны права администратора");
         await RefreshAsync();
+        StartupLog.Info("Главное окно: первый опрос завершён");
         ConfigureUpdateTimer();
         if (_settings.CheckForUpdates) await CheckUpdatesAsync(false);
+        StartupLog.Info("Главное окно: завершено событие Loaded");
     }
 
     private void ConfigureUpdateTimer()
@@ -194,6 +209,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            StartupLog.Error("Ошибка обновления данных", ex);
             SetStatus("Ошибка обновления данных: " + ex.Message);
         }
         finally { _refreshing = false; }
@@ -354,13 +370,21 @@ public partial class MainWindow : Window
 
     private void InitializeTray()
     {
-        // Load the same embedded icon that is compiled into MemPulse.exe and used by WPF windows.
-        var resource = System.Windows.Application.GetResourceStream(
-            new Uri("pack://application:,,,/Assets/MemPulse.ico"))
-            ?? throw new InvalidOperationException("Не найдена встроенная иконка MemPulse.");
-        using (resource.Stream)
-        using (var brandIcon = new System.Drawing.Icon(resource.Stream, new System.Drawing.Size(32, 32)))
-            _trayIcon = (System.Drawing.Icon)brandIcon.Clone();
+        // Loading the WPF pack URI / ICO decoder must not be a single point of failure.
+        try
+        {
+            var resource = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/MemPulse.ico"))
+                ?? throw new InvalidOperationException("Не найдена встроенная иконка MemPulse.");
+            using (resource.Stream)
+            using (var brandIcon = new System.Drawing.Icon(resource.Stream, new System.Drawing.Size(32, 32)))
+                _trayIcon = (System.Drawing.Icon)brandIcon.Clone();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Error("Загрузка иконки трея не удалась. Используется системная иконка.", ex);
+            _trayIcon = (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
+        }
 
         _tray = new Forms.NotifyIcon
         {
@@ -397,7 +421,13 @@ public partial class MainWindow : Window
 
         if (_lastTrayPercent == percent) return;
 
-        var nextIcon = TrayIconRenderer.Create(percent);
+        System.Drawing.Icon nextIcon;
+        try { nextIcon = TrayIconRenderer.Create(percent); }
+        catch (Exception ex)
+        {
+            StartupLog.Error("Не удалось нарисовать процент ОЗУ в трее", ex);
+            return;
+        }
         var previousIcon = _trayIcon;
         try
         {
@@ -406,10 +436,10 @@ public partial class MainWindow : Window
             _lastTrayPercent = percent;
             previousIcon?.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
             nextIcon.Dispose();
-            throw;
+            StartupLog.Error("Не удалось обновить значок трея", ex);
         }
     }
 
@@ -432,6 +462,7 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        StartupLog.Info("Главное окно: закрытие (выход=" + _forceExit + ")");
         if (!_forceExit && _settings.CloseToTray && _tray is not null)
         {
             e.Cancel = true;

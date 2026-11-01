@@ -18,7 +18,7 @@ public sealed class SettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            // Corrupt/unreadable settings fall back to safe defaults.
+            StartupLog.Warn("Не удалось загрузить настройки, используются значения по умолчанию", ex);
         }
         return new AppSettings();
     }

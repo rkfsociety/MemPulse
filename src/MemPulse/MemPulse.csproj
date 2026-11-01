@@ -11,6 +11,7 @@
     <RootNamespace>MemPulse</RootNamespace>
     <Version>0.1.3</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>MemPulse.Program</StartupObject>
     <ApplicationIcon>Assets\MemPulse.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

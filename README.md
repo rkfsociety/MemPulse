@@ -1,72 +1,75 @@
 # MemPulse
 
-A compact Windows memory monitor and cleaner with a per-process RAM view. Inspired by [Mem Reduct](https://github.com/henrypp/memreduct), but implemented independently in C# / WPF.
+MemPulse — компактная программа для Windows, предназначенная для мониторинга и очистки оперативной памяти с отображением потребления ОЗУ каждым процессом. Проект вдохновлён [Mem Reduct](https://github.com/henrypp/memreduct), но реализован независимо на C# / WPF.
 
-## Features
+## Возможности
 
-- Live physical memory usage, available RAM, system cache, committed bytes and commit limit.
-- Searchable, sortable process table: PID, **working set (physical pages mapped into the process)**, and **private committed bytes**.
-- One-click purge of standby pages and opt-in advanced actions for system working sets and modified pages.
-- Optional trim of a **selected** process working set, with confirmation.
-- Optional automatic **standby-only** purge above a RAM usage threshold with a cooldown. Off by default.
-- Elevation on demand. Monitoring works without admin rights; system-wide cleaning requires admin.
-- Windows notification area, minimize/close-to-tray preferences, optional Windows startup, local settings.
-- Windows CI build, smoke tests, and a self-contained portable x64 build artifact.
-- Per-user Windows installer and versioned GitHub Releases.
-- Optional update checks against the official GitHub Releases API. The update button downloads the release installer, verifies its SHA-256 against the asset digest, and launches the installer after confirmation.
+- Мониторинг в реальном времени: используемая и доступная физическая память, системный кэш, выделенная память (commit) и её лимит.
+- Таблица процессов с поиском и сортировкой: PID, **рабочий набор (working set — физические страницы памяти, отображённые в адресное пространство процесса)** и **частная выделенная память (private bytes)**.
+- Очистка списка ожидания (standby) одним нажатием, а также дополнительные операции с рабочими наборами системы и списком изменённых страниц памяти.
+- Уменьшение рабочего набора **выбранного процесса** после подтверждения пользователя.
+- Необязательная автоматическая очистка **только standby-кэша** при превышении заданного порога использования ОЗУ с ограничением частоты запусков. По умолчанию отключена.
+- Запрос прав администратора по необходимости: мониторинг доступен без повышенных прав, системная очистка требует прав администратора.
+- Значок в области уведомлений Windows, настройка сворачивания и закрытия в трей, автозапуск вместе с Windows и локальное хранение настроек.
+- Автоматическая сборка под Windows, базовые тесты и создание автономной портативной сборки для x64.
+- Установщик для текущего пользователя Windows и выпуск версионированных релизов на GitHub.
+- Необязательная проверка обновлений через официальный GitHub Releases API. Программа скачивает установщик новой версии, сверяет его SHA-256 с контрольной суммой релизного файла и запускает установку после подтверждения.
 
-## Build
+## Сборка
 
-Requires Windows 10/11 and the .NET 8 SDK with WPF tooling.
+Требуются Windows 10/11 и .NET 8 SDK с поддержкой WPF.
 
 ```powershell
 dotnet build src/MemPulse/MemPulse.csproj -c Release
 dotnet run --project src/MemPulse/MemPulse.csproj -c Release
 ```
 
-Portable self-contained build:
+Создание автономной портативной сборки:
 
 ```powershell
 dotnet publish src/MemPulse/MemPulse.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 ```
 
-Every push to `main` runs the [Windows build workflow](.github/workflows/windows.yml) and uploads a portable executable artifact after a successful build.
+Каждая отправка изменений в ветку `main` запускает [workflow сборки Windows](.github/workflows/windows.yml). После успешной сборки исполняемый файл публикуется как артефакт GitHub Actions.
 
-## Releases and updates
+## Релизы и обновления
 
-New stable releases are built by [Release MemPulse](.github/workflows/release.yml).
-Go to **Actions → Release MemPulse → Run workflow**, choose main and enter a new tag such as `v0.1.0`.
-Alternatively, push a new tag matching `vMAJOR.MINOR.PATCH` that points to a commit on main.
+За выпуск стабильных версий отвечает workflow [Release MemPulse](.github/workflows/release.yml).
 
-The workflow builds/tests the WPF project, publishes a self-contained `MemPulse.exe`,
-builds a per-user Inno Setup installer (`MemPulse-Setup-x64.exe`), creates
-`SHA256SUMS.txt`, and publishes all three files to a GitHub Release. Existing
-release tags must not be reused. The version is stamped into the .NET assembly.
+Чтобы создать релиз, откройте **Actions → Release MemPulse → Run workflow**, выберите ветку `main` и укажите новую версию, например `v0.1.0`. Другой способ — отправить тег формата `vMAJOR.MINOR.PATCH`, указывающий на коммит ветки `main`.
 
-**Use the installer for updateable installations.** It installs into
-`%LOCALAPPDATA%\\Programs\\MemPulse` without elevation. Once installed, the
-app checks for updates at startup and every six hours (configurable on/off in
-Settings). Press **Check updates** to check manually, then **Install v…** to download
-the installer with SHA-256 verification and open the upgrade wizard. It closes
-MemPulse to let setup replace the files. Local settings are preserved.
+Workflow собирает и тестирует WPF-приложение, создаёт автономный исполняемый файл `MemPulse.exe`, установщик Inno Setup для текущего пользователя (`MemPulse-Setup-x64.exe`) и файл контрольных сумм `SHA256SUMS.txt`. Все три файла прикрепляются к релизу GitHub. Повторно использовать теги уже выпущенных версий нельзя. Номер версии записывается в сборку .NET.
 
-A standalone portable EXE can also detect new versions, but the update button
-runs the installer (migrating to an installed copy), rather than overwriting
-the portable file. Release executables are not currently Authenticode-signed:
-Windows SmartScreen may display a warning until code signing is configured.
+**Для установки с поддержкой обновлений используйте установщик.** Программа устанавливается в `%LOCALAPPDATA%\Programs\MemPulse` без запроса прав администратора. После установки проверка обновлений выполняется при запуске и каждые шесть часов; её можно отключить в настройках.
 
-## Understanding the numbers
+Для ручной проверки нажмите **Check updates** («Проверить обновления»). Если доступна новая версия, нажмите **Install v…** («Установить версию…»). Программа скачает установщик, проверит SHA-256, откроет мастер установки и завершит свою работу, чтобы можно было заменить файлы. Локальные настройки сохраняются.
 
-**Used physical RAM** is total physical RAM minus Windows' available memory. **Working set** is physical memory mapped into a process, including potentially shared pages. It must **not** be summed across processes to estimate total physical RAM. **Private** is process-specific committed memory, not necessarily resident in RAM. File cache is a separate approximate Windows performance counter and overlaps with other memory accounting categories.
+Портативная версия `MemPulse.exe` также обнаруживает обновления, однако кнопка обновления запускает установщик и тем самым переводит приложение на установленную версию, а не перезаписывает портативный EXE.
 
-## Safety and compatibility
+В настоящее время исполняемые файлы релизов **не имеют цифровой подписи Authenticode**. Пока не настроена подпись кода, Windows SmartScreen может показывать предупреждение.
 
-Clearing caches **does not create more physical RAM** or guarantee faster performance. Windows normally reclaims cached memory automatically. Forcing cache purges can **increase disk activity, page faults and stuttering**. Memory cleanup should generally be used only when investigating a specific memory-pressure issue.
+## Что означают показатели памяти
 
-The system-wide cleanup actions call the **undocumented** `NtSetSystemInformation(SystemMemoryListInformation)` commands used on current Windows versions. They may fail, behave differently, or cease to work after Windows updates. The UI reports the actual NTSTATUS for failed calls. Run the application normally for monitoring; restart with administrator privileges only when cleanup is needed. The more disruptive working-set and modified-page actions require explicit selection and confirmation. Auto-clean never invokes them.
+**Используемая физическая память** — общий объём ОЗУ за вычетом памяти, которую Windows считает доступной.
 
-Protected or short-lived processes might not be readable or trimmable. Process RAM usage is an instantaneous estimate. Settings are stored at `%LOCALAPPDATA%\MemPulse\settings.json` and Windows startup uses the current user's `Run` registry key.
+**Рабочий набор (Working set)** — физическая память, отображённая в адресное пространство процесса. В него могут входить страницы, совместно используемые несколькими процессами. Поэтому **нельзя суммировать рабочие наборы всех процессов**, чтобы получить общий объём занятой физической памяти.
 
-## License and attribution
+**Частная память (Private)** — память, выделенная конкретному процессу, которая не обязательно в данный момент находится в физическом ОЗУ.
 
-MemPulse is an independent implementation, **not** a redistribution or fork of Mem Reduct. Mem Reduct is GPL-3.0 licensed; its source code was not copied into MemPulse. The code in this repository is offered under the [MIT License](LICENSE).
+**Системный файловый кэш** — отдельный приблизительный показатель Windows; его учёт может пересекаться с другими категориями памяти.
+
+## Безопасность и совместимость
+
+Очистка кэша **не увеличивает физический объём ОЗУ** и не гарантирует ускорения компьютера. Windows обычно самостоятельно освобождает кэшированную память при необходимости. Принудительная очистка может **увеличить нагрузку на диск, количество ошибок отсутствия страниц (page faults) и вызвать подтормаживания**. Использовать такие операции рекомендуется только при решении конкретных проблем с нехваткой памяти.
+
+Для системной очистки используются **недокументированные** команды `NtSetSystemInformation(SystemMemoryListInformation)`, доступные в некоторых версиях Windows. После обновлений системы они могут работать иначе, возвращать ошибку или перестать поддерживаться. При неудачном вызове интерфейс отображает код NTSTATUS.
+
+Для обычного мониторинга запускайте приложение без повышения прав; режим администратора нужен только для системной очистки. Более рискованные операции с рабочими наборами и изменёнными страницами требуют явного выбора и подтверждения. Автоочистка их не запускает.
+
+Защищённые или быстро завершающиеся процессы могут быть недоступны для анализа либо очистки. Показатели использования памяти процессами отражают состояние на момент измерения.
+
+Настройки сохраняются в `%LOCALAPPDATA%\MemPulse\settings.json`. Для автозапуска используется раздел реестра `Run` текущего пользователя Windows.
+
+## Лицензия и указание авторства
+
+MemPulse — независимая реализация, **не являющаяся форком или переизданием Mem Reduct**. Проект Mem Reduct распространяется по лицензии GPL-3.0; его исходный код не копировался в MemPulse. Код этого репозитория распространяется по [лицензии MIT](LICENSE).

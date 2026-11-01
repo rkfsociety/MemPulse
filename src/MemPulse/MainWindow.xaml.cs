@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
     private int? _lastTrayPercent;
+    private readonly List<double> _memoryHistory = [];
     private bool _refreshing;
     private bool _cleaning;
     private bool _forceExit;
@@ -54,6 +55,8 @@ public partial class MainWindow : Window
         try { _settings.StartWithWindows = StartupService.IsEnabled(); }
         catch (Exception ex) { SetStatus("Не удалось прочитать автозапуск: " + ex.Message); }
 
+        VersionText.Text = "MemPulse  ·  v" + UpdateService.CurrentVersion;
+        UpdateAutomationSummary();
         ElevateButton.Visibility = CleanupService.IsElevated ? Visibility.Collapsed : Visibility.Visible;
         CleanButton.IsEnabled = CleanupService.IsElevated;
         try
@@ -182,7 +185,7 @@ public partial class MainWindow : Window
             UsedText.Text = Format.Bytes(memory.Used);
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
             TotalText.Text = Format.Bytes(memory.Total) + " всего";
-            UsageBar.Value = memory.UsedPercent;
+            UpdateMemoryVisual(memory.UsedPercent);
             UpdateTray(memory);
             AvailableText.Text = Format.Bytes(memory.Available);
             CacheText.Text = Format.Bytes(memory.Cache);
@@ -321,6 +324,7 @@ public partial class MainWindow : Window
             StartupService.SetEnabled(next.StartWithWindows);
             _store.Save(next);
             _settings = next;
+            UpdateAutomationSummary();
             ConfigureTimer();
             ConfigureUpdateTimer();
             if (next.CheckForUpdates) _ = CheckUpdatesAsync(false);
@@ -481,6 +485,108 @@ public partial class MainWindow : Window
         _trayIcon?.Dispose();
         _trayIcon = null;
     }
+
+
+    private void UpdateAutomationSummary()
+    {
+        AutoCleanStateText.Text = _settings.AutoClean ? "Включена" : "Отключена";
+        AutoCleanStateText.Foreground = (System.Windows.Media.Brush)FindResource(
+            _settings.AutoClean ? "AccentBrush" : "MutedBrush");
+        AutoCleanThresholdText.Text =
+            $"Порог: {_settings.AutoCleanThreshold}% · пауза: {_settings.AutoCleanCooldownMinutes} мин.";
+    }
+
+    private void UpdateMemoryVisual(double percent)
+    {
+        // Ring is drawn from actual GlobalMemoryStatusEx measurements, never mock values.
+        double value = Math.Clamp(percent, 0, 100);
+        FullUsageRing.Visibility = value >= 99.95 ? Visibility.Visible : Visibility.Collapsed;
+        UsageArc.Visibility = value > 0 && value < 99.95 ? Visibility.Visible : Visibility.Collapsed;
+        var color = value >= 90 ? System.Windows.Media.Color.FromRgb(255, 112, 120)
+            : value >= 80 ? System.Windows.Media.Color.FromRgb(255, 199, 104)
+            : System.Windows.Media.Color.FromRgb(46, 226, 193);
+        UsageArc.Stroke = new System.Windows.Media.SolidColorBrush(color);
+        if (value > 0 && value < 99.95)
+        {
+            const double radius = 74;
+            const double cx = 83;
+            const double cy = 83;
+            double angle = (value / 100.0) * (2.0 * Math.PI) - Math.PI / 2;
+            var end = new System.Windows.Point(cx + radius * Math.Cos(angle),
+                                               cy + radius * Math.Sin(angle));
+            var figure = new System.Windows.Media.PathFigure
+            {
+                StartPoint = new System.Windows.Point(cx, cy - radius),
+                IsClosed = false,
+                IsFilled = false
+            };
+            figure.Segments.Add(new System.Windows.Media.ArcSegment(
+                end, new System.Windows.Size(radius, radius), 0, value > 50,
+                System.Windows.Media.SweepDirection.Clockwise, true));
+            var geometry = new System.Windows.Media.PathGeometry();
+            geometry.Figures.Add(figure);
+            UsageArc.Data = geometry;
+        }
+
+        // Keep a bounded rolling history; no background sampling or extra polling.
+        _memoryHistory.Add(value);
+        if (_memoryHistory.Count > 90) _memoryHistory.RemoveAt(0);
+        RedrawHistory();
+    }
+
+    private void HistoryCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawHistory();
+
+    private void RedrawHistory()
+    {
+        double width = HistoryCanvas.ActualWidth;
+        double height = HistoryCanvas.ActualHeight;
+        if (width <= 1 || height <= 1 || _memoryHistory.Count == 0) return;
+
+        var points = new System.Windows.Media.PointCollection();
+        if (_memoryHistory.Count == 1)
+        {
+            double y = height * (1 - _memoryHistory[0] / 100.0);
+            points.Add(new System.Windows.Point(0, y));
+            points.Add(new System.Windows.Point(width, y));
+        }
+        else
+        {
+            for (int i = 0; i < _memoryHistory.Count; i++)
+            {
+                double x = i * width / (_memoryHistory.Count - 1);
+                double y = height * (1 - _memoryHistory[i] / 100.0);
+                points.Add(new System.Windows.Point(x, Math.Clamp(y, 0, height)));
+            }
+        }
+        HistoryLine.Points = points;
+        var filled = new System.Windows.Media.PointCollection
+        {
+            new System.Windows.Point(0, height)
+        };
+        foreach (var point in points) filled.Add(point);
+        filled.Add(new System.Windows.Point(width, height));
+        HistoryFill.Points = filled;
+    }
+
+    private void Overview_Click(object sender, RoutedEventArgs e)
+    {
+        OverviewCard.BringIntoView();
+        SetStatus("Обзор текущего использования памяти.");
+    }
+
+    private void Processes_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Focus();
+        SetStatus("Введите имя процесса или PID для поиска.");
+    }
+
+    private void About_Click(object sender, RoutedEventArgs e) =>
+        MessageBox.Show(this,
+            "MemPulse v" + UpdateService.CurrentVersion +
+            "\\nМониторинг памяти и управление её очисткой в Windows." +
+            "\\n\\nПотребление ОЗУ измеряется средствами Windows. " +
+            "Очистка кэша не гарантирует ускорения системы.",
+            "О программе MemPulse", MessageBoxButton.OK, MessageBoxImage.Information);
 
     private void SetStatus(string text) => StatusText.Text = text;
 }

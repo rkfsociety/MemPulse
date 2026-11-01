@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using MemPulse.Core;
 using Forms = System.Windows.Forms;
 
+using Button = System.Windows.Controls.Button;
 using Window = System.Windows.Window;
 using MessageBox = System.Windows.MessageBox;
 

@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MemPulse</AssemblyName>
     <RootNamespace>MemPulse</RootNamespace>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\MemPulse.ico</ApplicationIcon>
   </PropertyGroup>

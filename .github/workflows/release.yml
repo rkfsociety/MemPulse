@@ -115,8 +115,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $exe = (Resolve-Path 'publish/MemPulse.exe').Path
           $process = Start-Process -FilePath $exe -ArgumentList '--startup-smoke-test' -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Packaged MemPulse startup failed: $($process.ExitCode)" }
           $logDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'MemPulse\Logs'
+          if (Test-Path $logDir) {
+            Get-ChildItem $logDir -Filter 'startup-*.log' | ForEach-Object {
+              Write-Host "==== Startup diagnostic: $($_.Name) ===="
+              Get-Content $_.FullName -Tail 200
+            }
+          }
+          if ($process.ExitCode -ne 0) { throw "Packaged MemPulse startup failed: $($process.ExitCode)" }
           $latest = Get-ChildItem $logDir -Filter 'startup-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $latest -or -not (Select-String -Path $latest.FullName -Pattern 'Проверка создания главного окна пройдена' -Quiet)) {
             throw "Packaged startup succeeded but no startup success marker was recorded."

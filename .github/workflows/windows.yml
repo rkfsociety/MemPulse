@@ -16,6 +16,8 @@ jobs:
         run: dotnet build src/MemPulse/MemPulse.csproj --configuration Release --warnaserror
       - name: Run core smoke tests
         run: dotnet run --project tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
+      - name: Test brand icon and RAM percentage rendering
+        run: dotnet run --project tests/MemPulse.IconTests/MemPulse.IconTests.csproj --configuration Release
       - name: Publish portable Windows x64
         run: dotnet publish src/MemPulse/MemPulse.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish
       - name: Build per-user installer

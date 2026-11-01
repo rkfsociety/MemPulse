@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../src/MemPulse/Core/TrayIconRenderer.cs" Link="TrayIconRenderer.cs" />
+    <None Include="../../src/MemPulse/Assets/MemPulse.ico" Link="MemPulse.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

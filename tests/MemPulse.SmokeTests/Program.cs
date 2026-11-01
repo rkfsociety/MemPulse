@@ -53,4 +53,17 @@ Assert(snapshot.Count == 1 && snapshot[0].Pid == 4 && resetEvents == 2,
 snapshot.ReplaceWith([]);
 Assert(snapshot.Count == 0 && resetEvents == 3, "empty snapshot clears all processes");
 
+var grouped = ProcessGrouping.Build([
+    new ProcessUsage(11, "chrome", 4000, 800),
+    new ProcessUsage(12, "Chrome", 6000, 1000),
+    new ProcessUsage(23, "explorer", 3000, 900)
+]);
+Assert(grouped.Count == 2, "process grouping merges app names ignoring case");
+Assert(grouped[0].Count == 2 && grouped[0].WorkingBytes == 10000 &&
+       grouped[0].PrivateBytes == 1800 && grouped[0].Members.Select(x => x.Pid).SequenceEqual([12, 11]),
+    "group totals and original child PIDs are preserved");
+Assert(grouped[0].RelativeLoad == 100 && grouped[1].RelativeLoad is > 0 and < 100,
+    "relative memory load uses largest aggregated application");
+Assert(ProcessGrouping.Build([]).Count == 0, "empty process snapshots are valid");
+
 Console.WriteLine("All smoke tests passed.");

@@ -4,6 +4,8 @@
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <SolidColorBrush x:Key="WindowBrush" Color="#09121D"/>
+        <SolidColorBrush x:Key="SelectedNavBrush" Color="#17413F"/>
+        <SolidColorBrush x:Key="TransparentNavBrush" Color="Transparent"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#11202C"/>
         <SolidColorBrush x:Key="RaisedBrush" Color="#203744"/>
         <SolidColorBrush x:Key="BorderBrushApp" Color="#294552"/>

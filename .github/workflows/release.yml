@@ -71,8 +71,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $existing = gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName 2>$null
-          if ($LASTEXITCODE -eq 0) { throw "Release $env:TAG already exists. Refusing overwrite." }
+          # gh release create rejects a tag that already has a release; do not use --clobber.
           gh release create $env:TAG `
             "dist/MemPulse-Setup-x64.exe" `
             "publish/MemPulse.exe" `

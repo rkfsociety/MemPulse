@@ -48,6 +48,8 @@ public static class Program
                 if (templateCount < 2)
                     throw new InvalidOperationException("Не найдены шаблоны иконок и показателей памяти.");
                 StartupLog.Info("Проверены " + templateCount + " шаблона таблицы процессов.");
+                window.VerifyProcessRefreshForSmokeTest();
+                StartupLog.Info("Проверено многократное обновление и фильтрация списка процессов.");
                 StartupLog.Info("Проверка создания главного окна пройдена");
                 window.Close();
                 app.Shutdown();

@@ -34,4 +34,23 @@ Assert(UpdateService.IsExpectedAssetUrl(
 Assert(!UpdateService.IsExpectedAssetUrl(
     new Uri("https://github.com.attacker.test/rkfsociety/MemPulse/releases/download/v1.2.3/MemPulse-Setup-x64.exe"),
     "v1.2.3"), "reject impostor host");
+var snapshot = new ProcessSnapshotCollection<ProcessUsage>();
+int resetEvents = 0;
+snapshot.CollectionChanged += (_, args) =>
+{
+    if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        resetEvents++;
+};
+snapshot.ReplaceWith([
+    new ProcessUsage(1, "Alpha", 1000, 800),
+    new ProcessUsage(2, "Beta", 500, 300),
+    new ProcessUsage(3, "Gamma", 200, 100)
+]);
+Assert(snapshot.Count == 3 && resetEvents == 1, "batch process snapshot raises one reset event");
+snapshot.ReplaceWith([new ProcessUsage(4, "Delta", 700, 500)]);
+Assert(snapshot.Count == 1 && snapshot[0].Pid == 4 && resetEvents == 2,
+    "second snapshot replaces all rows atomically");
+snapshot.ReplaceWith([]);
+Assert(snapshot.Count == 0 && resetEvents == 3, "empty snapshot clears all processes");
+
 Console.WriteLine("All smoke tests passed.");

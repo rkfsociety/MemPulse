@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
@@ -24,7 +23,7 @@ public partial class MainWindow : Window
     private AvailableUpdate? _availableUpdate;
     private bool _checkingUpdates;
     private bool _installingUpdate;
-    private readonly ObservableCollection<ProcessUsage> _processes = [];
+    private readonly ProcessSnapshotCollection<ProcessUsage> _processes = [];
     private readonly DispatcherTimer _timer = new();
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _tray;
@@ -202,16 +201,7 @@ public partial class MainWindow : Window
             CommitText.Text = Format.Bytes(memory.Committed);
             LimitText.Text = Format.Bytes(memory.CommitLimit);
 
-            int? selectedPid = (ProcessGrid.SelectedItem as ProcessUsage)?.Pid;
-            // Batch refresh to avoid re-sorting the view for every individual row.
-            using (CollectionViewSource.GetDefaultView(_processes).DeferRefresh())
-            {
-                _processes.Clear();
-                foreach (var row in processes) _processes.Add(row);
-            }
-            if (selectedPid.HasValue)
-                ProcessGrid.SelectedItem = _processes.FirstOrDefault(row => row.Pid == selectedPid.Value);
-            ProcessCountText.Text = RussianText.Processes(processes.Count) + " · память процессов";
+            ApplyProcessSnapshot(processes);
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean && CleanupService.IsElevated &&
@@ -230,6 +220,54 @@ public partial class MainWindow : Window
             SetStatus("Ошибка обновления данных: " + ex.Message);
         }
         finally { _refreshing = false; }
+    }
+
+    private void ApplyProcessSnapshot(IReadOnlyList<ProcessUsage> processes)
+    {
+        int? selectedPid = (ProcessGrid.SelectedItem as ProcessUsage)?.Pid;
+        // A single Reset event keeps WPF's sorted/filtered CollectionView consistent.
+        // DeferRefresh() must NOT be used around mutations: changing the current
+        // item while refresh is deferred throws and leaves a partly updated table.
+        _processes.ReplaceWith(processes);
+        if (selectedPid.HasValue)
+            ProcessGrid.SelectedItem = _processes.FirstOrDefault(p => p.Pid == selectedPid.Value);
+        ProcessCountText.Text = RussianText.Processes(processes.Count) + " · память процессов";
+    }
+
+    // Invoked by packaged-executable CI startup check. Uses the same path as live polling.
+    internal void VerifyProcessRefreshForSmokeTest()
+    {
+        try
+        {
+            ApplyProcessSnapshot([
+                new ProcessUsage(101, "Alpha", 4000, 2000),
+                new ProcessUsage(102, "Beta", 3000, 1000),
+                new ProcessUsage(103, "Gamma", 2000, 1000)
+            ]);
+            if (ProcessGrid.Items.Count != 3)
+                throw new InvalidOperationException("Таблица не отобразила первый снимок.");
+            SearchBox.Text = "Beta";
+            if (ProcessGrid.Items.Count != 1)
+                throw new InvalidOperationException("Поиск не отфильтровал процессы.");
+            ApplyProcessSnapshot([
+                new ProcessUsage(201, "Beta 2", 5000, 3000),
+                new ProcessUsage(202, "Delta", 1000, 500)
+            ]);
+            if (ProcessGrid.Items.Count != 1 ||
+                (ProcessGrid.Items[0] as ProcessUsage)?.Pid != 201)
+                throw new InvalidOperationException("Обновление таблицы нарушило фильтрацию.");
+            SearchBox.Clear();
+            if (ProcessGrid.Items.Count != 2)
+                throw new InvalidOperationException("После очистки поиска видны не все процессы.");
+            ApplyProcessSnapshot([]);
+            if (ProcessGrid.Items.Count != 0)
+                throw new InvalidOperationException("После пустого снимка остались строки.");
+        }
+        finally
+        {
+            SearchBox.Clear();
+            ApplyProcessSnapshot([]);
+        }
     }
 
     private bool FilterProcess(object item)

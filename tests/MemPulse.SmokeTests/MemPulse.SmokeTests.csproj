@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="../../src/MemPulse/Core/Models.cs" Link="Models.cs" />
+    <Compile Include="../../src/MemPulse/Core/ProcessSnapshotCollection.cs" Link="ProcessSnapshotCollection.cs" />
     <Compile Include="../../src/MemPulse/Core/UpdateService.cs" Link="UpdateService.cs" />
   </ItemGroup>
 </Project>

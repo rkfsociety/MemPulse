@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Threading;
 using MemPulse.Core;
 
@@ -48,6 +50,42 @@ public static class Program
                 if (templateCount < 2)
                     throw new InvalidOperationException("Не найдены шаблоны иконок и показателей памяти.");
                 StartupLog.Info("Проверены " + templateCount + " шаблона таблицы процессов.");
+                // Validate themed scrollbars and dark selection: default Windows
+                // templates caused white-on-white rows and bright legacy scrollbars.
+                var cell = new DataGridCell
+                {
+                    Style = (Style)app.Resources[typeof(DataGridCell)],
+                    Content = new TextBlock { Text = "Проверка выделения" },
+                    IsSelected = true
+                };
+                cell.Measure(new Size(240, 40));
+                cell.Arrange(new Rect(0, 0, 240, 40));
+                if (cell.Background is not SolidColorBrush selectedBrush ||
+                    selectedBrush.Color.R > 100 || selectedBrush.Color.G > 160)
+                    throw new InvalidOperationException("Выделение строки не использует тёмную тему.");
+
+                foreach (var orientation in new[] { Orientation.Vertical, Orientation.Horizontal })
+                {
+                    var scroll = new ScrollBar
+                    {
+                        Orientation = orientation,
+                        Style = (Style)app.Resources[typeof(ScrollBar)]
+                    };
+                    scroll.Measure(new Size(120, 120));
+                    scroll.Arrange(new Rect(0, 0, 120, 120));
+                    if (scroll.Template.FindName("PART_Track", scroll) is not Track)
+                        throw new InvalidOperationException("Скроллбар не использует оформленный трек.");
+                }
+                var primary = new Button
+                {
+                    Content = "Очистить", Style = (Style)app.Resources["PrimaryButton"]
+                };
+                primary.Measure(new Size(180, 48));
+                primary.Arrange(new Rect(0, 0, 180, 48));
+                if (primary.Foreground is not SolidColorBrush labelBrush ||
+                    labelBrush.Color.R > 100 || labelBrush.Color.G > 120)
+                    throw new InvalidOperationException("Акцентная кнопка не использует тёмный контрастный текст.");
+                StartupLog.Info("Проверены контраст выделения, кнопок и оба типа скроллбаров.");
                 window.VerifyProcessRefreshForSmokeTest();
                 StartupLog.Info("Проверено многократное обновление и фильтрация списка процессов.");
                 StartupLog.Info("Проверка создания главного окна пройдена");

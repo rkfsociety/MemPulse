@@ -1,3 +1,4 @@
+using System.IO;
 using System.Buffers;
 using System.Net;
 using System.Net.Http;
@@ -44,7 +45,9 @@ public sealed class UpdateService
         if (tag is null || !Regex.IsMatch(tag, @"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$",
                 RegexOptions.CultureInvariant))
             return false;
-        return Version.TryParse(tag.AsSpan(1), out version);
+        if (!Version.TryParse(tag.AsSpan(1), out var parsed) || parsed is null) return false;
+        version = parsed;
+        return true;
     }
 
     public static bool IsExpectedAssetUrl(Uri uri, string tag) =>

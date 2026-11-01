@@ -8,6 +8,9 @@ using System.Windows.Threading;
 using MemPulse.Core;
 using Forms = System.Windows.Forms;
 
+using Window = System.Windows.Window;
+using MessageBox = System.Windows.MessageBox;
+
 namespace MemPulse;
 
 public partial class MainWindow : Window

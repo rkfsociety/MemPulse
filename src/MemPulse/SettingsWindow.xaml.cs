@@ -1,6 +1,9 @@
 using System.Windows;
 using MemPulse.Core;
 
+using Window = System.Windows.Window;
+using MessageBox = System.Windows.MessageBox;
+
 namespace MemPulse;
 
 public partial class SettingsWindow : Window

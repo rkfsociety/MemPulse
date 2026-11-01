@@ -21,9 +21,7 @@ public static class Format
     public static string Bytes(ulong bytes)
     {
         double size = bytes;
-        string[] units = ["B", "KB", "GB", "TB", "PB"];
-        // Use a separate MB unit to keep the displayed values in binary multiples.
-        units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
         int index = 0;
         while (size >= 1024 && index < units.Length - 1) { size /= 1024; index++; }
         return size.ToString(index == 0 ? "0" : "0.0", CultureInfo.CurrentCulture) + " " + units[index];

@@ -18,6 +18,11 @@ public partial class MainWindow : Window
     private readonly MonitoringService _monitor = new();
     private readonly CleanupService _cleaner = new();
     private readonly SettingsStore _store = new();
+    private readonly UpdateService _updates = new();
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
+    private AvailableUpdate? _availableUpdate;
+    private bool _checkingUpdates;
+    private bool _installingUpdate;
     private readonly ObservableCollection<ProcessUsage> _processes = [];
     private readonly DispatcherTimer _timer = new();
     private AppSettings _settings = new();
@@ -36,6 +41,7 @@ public partial class MainWindow : Window
             ListSortDirection.Descending));
         view.Filter = FilterProcess;
         _timer.Tick += async (_, _) => await RefreshAsync();
+        _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -51,6 +57,92 @@ public partial class MainWindow : Window
         if (CleanupService.IsElevated) SetStatus("Administrator mode · cleanup available");
         else SetStatus("Monitoring active · administrator access required for system cleanup");
         await RefreshAsync();
+        ConfigureUpdateTimer();
+        if (_settings.CheckForUpdates) await CheckUpdatesAsync(false);
+    }
+
+    private void ConfigureUpdateTimer()
+    {
+        _updateTimer.Stop();
+        if (_settings.CheckForUpdates) _updateTimer.Start();
+    }
+
+    private async Task CheckUpdatesAsync(bool manual)
+    {
+        if (_checkingUpdates || _installingUpdate) return;
+        _checkingUpdates = true;
+        UpdateButton.IsEnabled = false;
+        try
+        {
+            var update = await _updates.CheckAsync();
+            _availableUpdate = update;
+            if (update is not null)
+            {
+                UpdateButton.Content = "Install v" + update.Version;
+                UpdateButton.Background = (System.Windows.Media.Brush)FindResource("AccentBrush");
+                UpdateButton.Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(16, 33, 40));
+                SetStatus("MemPulse " + update.Version + " is available.");
+            }
+            else
+            {
+                UpdateButton.Content = "Check updates";
+                UpdateButton.Background = (System.Windows.Media.Brush)FindResource("RaisedBrush");
+                UpdateButton.Foreground = (System.Windows.Media.Brush)FindResource("TextBrush");
+                if (manual) SetStatus("MemPulse is up to date (v" + UpdateService.CurrentVersion + ").");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (manual) SetStatus("Update check failed: " + ex.Message);
+        }
+        finally
+        {
+            _checkingUpdates = false;
+            UpdateButton.IsEnabled = true;
+        }
+    }
+
+    private async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (_installingUpdate || _checkingUpdates) return;
+        if (_availableUpdate is null)
+        {
+            await CheckUpdatesAsync(true);
+            return;
+        }
+
+        var update = _availableUpdate;
+        if (MessageBox.Show(this,
+                "Download and install MemPulse v" + update.Version +
+                "? The application will close and the installer will open.",
+                "Install MemPulse update", MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _installingUpdate = true;
+        UpdateButton.IsEnabled = false;
+        try
+        {
+            var progress = new Progress<double>(percent =>
+                SetStatus("Downloading verified update: " + percent.ToString("0") + "%"));
+            string setup = await _updates.DownloadAsync(update, progress);
+            var process = Process.Start(new ProcessStartInfo(setup) { UseShellExecute = true });
+            if (process is null) throw new InvalidOperationException("Installer did not start.");
+
+            _forceExit = true;
+            Close(); // Exit even if close-to-tray is enabled so installer can replace the executable.
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Update could not be installed",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _installingUpdate = false;
+            UpdateButton.IsEnabled = true;
+        }
     }
 
     private void ConfigureTimer()
@@ -211,6 +303,8 @@ public partial class MainWindow : Window
             _store.Save(next);
             _settings = next;
             ConfigureTimer();
+            ConfigureUpdateTimer();
+            if (next.CheckForUpdates) _ = CheckUpdatesAsync(false);
             SetStatus("Settings saved.");
         }
         catch (Exception ex)
@@ -308,6 +402,7 @@ public partial class MainWindow : Window
             return;
         }
         _timer.Stop();
+        _updateTimer.Stop();
         if (_tray is not null)
         {
             _tray.Visible = false;

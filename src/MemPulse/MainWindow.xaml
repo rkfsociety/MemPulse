@@ -35,6 +35,10 @@
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="UpdateButton" Content="Check updates" Style="{StaticResource ActionButton}"
+                            Padding="13,8" Margin="0,0,8,0" Click="Update_Click"
+                            ToolTip="Check GitHub Releases for a newer version"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                     <Button Content="Settings" Style="{StaticResource ActionButton}" Padding="13,8"
                             Margin="0,0,12,0" Click="Settings_Click"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>

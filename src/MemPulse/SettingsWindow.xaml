@@ -43,6 +43,10 @@
                 <CheckBox x:Name="StartupCheck" Content="Start with Windows" Margin="0,13,0,0"/>
                 <CheckBox x:Name="MinimizeCheck" Content="Minimize to notification area"/>
                 <CheckBox x:Name="CloseCheck" Content="Close button hides to notification area"/>
+                <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderBrushApp}" Margin="0,18,0,17"/>
+                <TextBlock Text="UPDATES" Style="{StaticResource MutedText}" FontWeight="Bold"/>
+                <CheckBox x:Name="UpdateCheck" Content="Automatically check GitHub for new versions"
+                          Margin="0,12,0,0"/>
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,17,0,0">

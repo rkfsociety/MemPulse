@@ -12,6 +12,8 @@ A compact Windows memory monitor and cleaner with a per-process RAM view. Inspir
 - Elevation on demand. Monitoring works without admin rights; system-wide cleaning requires admin.
 - Windows notification area, minimize/close-to-tray preferences, optional Windows startup, local settings.
 - Windows CI build, smoke tests, and a self-contained portable x64 build artifact.
+- Per-user Windows installer and versioned GitHub Releases.
+- Optional update checks against the official GitHub Releases API. The update button downloads the release installer, verifies its SHA-256 against the asset digest, and launches the installer after confirmation.
 
 ## Build
 
@@ -29,6 +31,29 @@ dotnet publish src/MemPulse/MemPulse.csproj -c Release -r win-x64 --self-contain
 ```
 
 Every push to `main` runs the [Windows build workflow](.github/workflows/windows.yml) and uploads a portable executable artifact after a successful build.
+
+## Releases and updates
+
+New stable releases are built by [Release MemPulse](.github/workflows/release.yml).
+Go to **Actions → Release MemPulse → Run workflow**, choose main and enter a new tag such as `v0.1.0`.
+Alternatively, push a new tag matching `vMAJOR.MINOR.PATCH` that points to a commit on main.
+
+The workflow builds/tests the WPF project, publishes a self-contained `MemPulse.exe`,
+builds a per-user Inno Setup installer (`MemPulse-Setup-x64.exe`), creates
+`SHA256SUMS.txt`, and publishes all three files to a GitHub Release. Existing
+release tags must not be reused. The version is stamped into the .NET assembly.
+
+**Use the installer for updateable installations.** It installs into
+`%LOCALAPPDATA%\\Programs\\MemPulse` without elevation. Once installed, the
+app checks for updates at startup and every six hours (configurable on/off in
+Settings). Press **Check updates** to check manually, then **Install v…** to download
+the installer with SHA-256 verification and open the upgrade wizard. It closes
+MemPulse to let setup replace the files. Local settings are preserved.
+
+A standalone portable EXE can also detect new versions, but the update button
+runs the installer (migrating to an installed copy), rather than overwriting
+the portable file. Release executables are not currently Authenticode-signed:
+Windows SmartScreen may display a warning until code signing is configured.
 
 ## Understanding the numbers
 

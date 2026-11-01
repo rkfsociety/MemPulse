@@ -37,6 +37,7 @@ public sealed class AppSettings
     public bool StartWithWindows { get; set; }
     public bool MinimizeToTray { get; set; } = true;
     public bool CloseToTray { get; set; }
+    public bool CheckForUpdates { get; set; } = true;
 
     public AppSettings Copy() => (AppSettings)MemberwiseClone();
 

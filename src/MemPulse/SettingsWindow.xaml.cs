@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         StartupCheck.IsChecked = _source.StartWithWindows;
         MinimizeCheck.IsChecked = _source.MinimizeToTray;
         CloseCheck.IsChecked = _source.CloseToTray;
+        UpdateCheck.IsChecked = _source.CheckForUpdates;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -44,7 +45,8 @@ public partial class SettingsWindow : Window
             AutoClean = AutoCleanCheck.IsChecked == true,
             StartWithWindows = StartupCheck.IsChecked == true,
             MinimizeToTray = MinimizeCheck.IsChecked == true,
-            CloseToTray = CloseCheck.IsChecked == true
+            CloseToTray = CloseCheck.IsChecked == true,
+            CheckForUpdates = UpdateCheck.IsChecked == true
         };
         DialogResult = true;
     }

@@ -18,6 +18,14 @@ jobs:
         run: dotnet run --project tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
       - name: Publish portable Windows x64
         run: dotnet publish src/MemPulse/MemPulse.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish
+      - name: Build per-user installer
+        shell: pwsh
+        run: ./scripts/build-installer.ps1 -Version 0.1.0
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemPulse-Setup-x64
+          path: dist/MemPulse-Setup-x64.exe
       - name: Upload portable app
         uses: actions/upload-artifact@v4
         with:

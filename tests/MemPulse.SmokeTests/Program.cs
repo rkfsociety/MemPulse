@@ -18,4 +18,14 @@ Assert(config.RefreshSeconds == 1 && config.AutoCleanThreshold == 98 &&
 var clone = config.Copy();
 clone.AutoClean = true;
 Assert(!config.AutoClean, "settings copy isolation");
+Assert(UpdateService.TryParseReleaseTag("v1.2.3", out var parsed) &&
+       parsed == new Version(1, 2, 3), "semantic release versions");
+Assert(!UpdateService.TryParseReleaseTag("v1.2.3-beta", out _), "reject prerelease tags");
+Assert(!UpdateService.TryParseReleaseTag("v1.02.3", out _), "reject noncanonical version");
+Assert(UpdateService.IsExpectedAssetUrl(
+    new Uri("https://github.com/rkfsociety/MemPulse/releases/download/v1.2.3/MemPulse-Setup-x64.exe"),
+    "v1.2.3"), "allow official installer URL");
+Assert(!UpdateService.IsExpectedAssetUrl(
+    new Uri("https://github.com.attacker.test/rkfsociety/MemPulse/releases/download/v1.2.3/MemPulse-Setup-x64.exe"),
+    "v1.2.3"), "reject impostor host");
 Console.WriteLine("All smoke tests passed.");

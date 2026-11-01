@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private readonly UpdateService _updates = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
     private AvailableUpdate? _availableUpdate;
+    private TaskCompletionSource<bool>? _confirmation;
     private bool _checkingUpdates;
     private bool _installingUpdate;
     private readonly ProcessSnapshotCollection<ProcessGroupUsage> _groups = [];
@@ -146,11 +147,9 @@ public partial class MainWindow : Window
         }
 
         var update = _availableUpdate;
-        if (MessageBox.Show(this,
+        if (!await ConfirmAsync("Обновление MemPulse",
                 "Скачать и установить MemPulse v" + update.Version +
-                "? Программа закроется и запустит мастер установки.",
-                "Обновление MemPulse", MessageBoxButton.YesNo,
-                MessageBoxImage.Question) != MessageBoxResult.Yes)
+                "? Программа закроется и запустит мастер установки.", "Установить"))
             return;
 
         _installingUpdate = true;
@@ -168,8 +167,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Ошибка установки обновления",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            StartupLog.Error("Ошибка установки обновления", ex);
+            SetStatus("Ошибка установки обновления: " + ex.Message);
         }
         finally
         {
@@ -340,9 +339,9 @@ public partial class MainWindow : Window
             return;
         }
         if ((options.WorkingSets || options.ModifiedPages) &&
-            MessageBox.Show(this,
+            !await ConfirmAsync("Подтверждение очистки",
                 "Очистка рабочих наборов и изменённых страниц может временно замедлить работу Windows и программ. Продолжить?",
-                "Подтверждение очистки", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                "Очистить"))
             return;
         await RunCleanupAsync(options, false);
         await RefreshAsync();
@@ -386,10 +385,10 @@ public partial class MainWindow : Window
     private async Task TrimProcessAsync(ProcessUsage selected)
     {
         if (_cleaning) return;
-        if (MessageBox.Show(this,
+        if (!await ConfirmAsync("Очистка памяти процесса",
                 "Уменьшить рабочий набор процесса " + selected.Name + " (PID " + selected.Pid +
                 ")? Данные могут быть повторно загружены в ОЗУ, а процесс — временно замедлиться.",
-                "Очистка памяти процесса", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                "Очистить PID"))
             return;
 
         _cleaning = true;
@@ -772,6 +771,29 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e) =>
         ActivateSection(Section.About);
+
+    private Task<bool> ConfirmAsync(string title, string description, string accept)
+    {
+        if (_confirmation is not null) return Task.FromResult(false);
+        _confirmation = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        ConfirmTitle.Text = title;
+        ConfirmDescription.Text = description;
+        ConfirmAcceptButton.Content = accept;
+        ConfirmOverlay.Visibility = Visibility.Visible;
+        ConfirmCancelButton.Focus();
+        return _confirmation.Task;
+    }
+
+    private void ConfirmYes_Click(object sender, RoutedEventArgs e) => CloseConfirmation(true);
+    private void ConfirmNo_Click(object sender, RoutedEventArgs e) => CloseConfirmation(false);
+
+    private void CloseConfirmation(bool accepted)
+    {
+        ConfirmOverlay.Visibility = Visibility.Collapsed;
+        var completion = _confirmation;
+        _confirmation = null;
+        completion?.TrySetResult(accepted);
+    }
 
     private void SetStatus(string text) => StatusText.Text = text;
 }

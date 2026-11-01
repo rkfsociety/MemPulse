@@ -12,6 +12,10 @@ public sealed record ProcessUsage(int Pid, string Name, long WorkingBytes, long 
 {
     public string WorkingText => Format.Bytes(WorkingBytes);
     public string PrivateText => Format.Bytes(PrivateBytes);
+    public string Monogram => Name.Length > 0 ? Name[..1].ToUpperInvariant() : "•";
+    // Scale is relative to the largest observed process in the same snapshot, not total RAM.
+    public double RelativeLoad { get; init; }
+    public byte[]? IconBytes { get; init; }
 }
 
 public static class Format

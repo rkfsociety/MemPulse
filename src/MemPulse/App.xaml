@@ -23,8 +23,9 @@
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         </Style>
+        <!-- Foreground inherits from Window/Button/DataGridCell. A global TextBlock
+             foreground setter overrides a primary button's dark text. -->
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
         </Style>
         <Style x:Key="MutedText" TargetType="TextBlock">

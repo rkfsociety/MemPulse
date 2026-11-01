@@ -2,179 +2,369 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        xml:lang="ru-RU" Title="MemPulse" Icon="Assets/MemPulse.png" Width="1050" Height="720" MinWidth="860" MinHeight="570"
+        xml:lang="ru-RU" Title="MemPulse" Icon="Assets/MemPulse.png"
+        Width="1270" Height="790" MinWidth="1080" MinHeight="660"
         WindowStyle="None" ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded" Closing="Window_Closing" StateChanged="Window_StateChanged">
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="58" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+        <shell:WindowChrome CaptionHeight="56" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <LinearGradientBrush x:Key="HeroGlow" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#152F39" Offset="0"/>
+            <GradientStop Color="#111F2D" Offset="0.48"/>
+            <GradientStop Color="#111B2A" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SideGlow" StartPoint="0,0" EndPoint="0.9,1">
+            <GradientStop Color="#102D36" Offset="0"/>
+            <GradientStop Color="#0B1521" Offset="0.55"/>
+            <GradientStop Color="#0C1722" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GraphFill" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#4C08D6BD" Offset="0"/>
+            <GradientStop Color="#0012C8BB" Offset="1"/>
+        </LinearGradientBrush>
+        <Style x:Key="SideButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Padding" Value="15,13"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style x:Key="CardLabel" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+    </Window.Resources>
     <Grid Background="{StaticResource WindowBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="190"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="59"/>
+            <RowDefinition Height="56"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="37"/>
+            <RowDefinition Height="38"/>
         </Grid.RowDefinitions>
-        <Border Grid.Row="0" Background="#111A25" BorderBrush="{StaticResource BorderBrushApp}"
-                BorderThickness="0,0,0,1">
-            <Grid Margin="22,0,12,0">
+
+        <!-- Custom title bar, still supports normal Windows window dragging. -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#09131D"
+                BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
+            <Grid Margin="20,0,12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Image Source="Assets/MemPulse.png" Width="36" Height="36"
-                           Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="MemPulse" FontSize="16" FontWeight="Bold"/>
-                        <TextBlock Text="МОНИТОРИНГ ОЗУ" Style="{StaticResource MutedText}" FontSize="10"/>
-                    </StackPanel>
-                    <Border Margin="18,0,0,0" Padding="8,3" CornerRadius="5" Background="#1E3A38" VerticalAlignment="Center">
-                        <TextBlock Text="АКТИВНО" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="Bold"/>
+                    <Image Source="Assets/MemPulse.png" Width="31" Height="31" Stretch="Uniform"/>
+                    <TextBlock Text="MemPulse" FontSize="17" FontWeight="Bold" Margin="11,0,0,0"
+                               VerticalAlignment="Center"/>
+                    <Border Margin="13,0,0,0" CornerRadius="6" Background="#16423C"
+                            VerticalAlignment="Center" Padding="8,4">
+                        <TextBlock Text="●  МОНИТОРИНГ" Foreground="{StaticResource AccentBrush}"
+                                   FontSize="10" FontWeight="SemiBold"/>
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="UpdateButton" Content="Обновления" Style="{StaticResource ActionButton}"
-                            Padding="13,8" Margin="0,0,8,0" Click="Update_Click"
-                            ToolTip="Проверить наличие новой версии на GitHub"
+                    <Button x:Name="UpdateButton" Content="Обновления"
+                            Style="{StaticResource ActionButton}" Padding="13,8" Margin="0,0,13,0"
+                            Click="Update_Click" ToolTip="Проверить наличие новой версии"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Content="Настройки" Style="{StaticResource ActionButton}" Padding="13,8"
-                            Margin="0,0,12,0" Click="Settings_Click"
+                    <Button Content="−" Style="{StaticResource TitleButton}"
+                            ToolTip="Свернуть" Click="Minimize_Click"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Content="−" Style="{StaticResource TitleButton}" ToolTip="Свернуть"
-                            Click="Minimize_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Content="×" Style="{StaticResource TitleButton}" ToolTip="Закрыть" FontSize="20"
-                            Click="Close_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                    <Button Content="×" Style="{StaticResource TitleButton}" FontSize="21"
+                            ToolTip="Закрыть" Click="Close_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="20,18,20,17">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="305"/>
-                <ColumnDefinition Width="15"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="{StaticResource PanelBrush}" CornerRadius="13">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="22,22,22,20">
-                        <TextBlock Text="ФИЗИЧЕСКАЯ ПАМЯТЬ" Style="{StaticResource MutedText}" FontWeight="SemiBold"/>
-                        <DockPanel Margin="0,10,0,6" LastChildFill="False">
-                            <TextBlock x:Name="UsedText" Text="—" FontSize="31" FontWeight="Bold"
-                                       DockPanel.Dock="Left" VerticalAlignment="Bottom"/>
-                            <TextBlock x:Name="PercentText" Text="—" Foreground="{StaticResource AccentBrush}"
-                                       FontSize="19" FontWeight="SemiBold" Margin="12,0,0,3"
-                                       VerticalAlignment="Bottom" DockPanel.Dock="Right"/>
-                        </DockPanel>
-                        <ProgressBar x:Name="UsageBar" Minimum="0" Maximum="100" Value="0"/>
-                        <TextBlock x:Name="TotalText" Text="Получение данных об ОЗУ…"
-                                   Style="{StaticResource MutedText}" Margin="0,9,0,0"/>
+        <!-- Compact navigation -->
+        <Border Grid.Row="1" Grid.Column="0" BorderThickness="0,0,1,0"
+                BorderBrush="{StaticResource BorderBrushApp}" Background="{StaticResource SideGlow}">
+            <Grid Margin="15,24,15,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="УПРАВЛЕНИЕ" Style="{StaticResource CardLabel}"
+                               Margin="11,0,0,17"/>
+                    <Button Content="◉   Обзор" Style="{StaticResource SideButton}"
+                            Foreground="{StaticResource AccentBrush}" Background="#17413F"
+                            Click="Overview_Click"/>
+                    <Button Content="▤   Процессы" Style="{StaticResource SideButton}"
+                            Click="Processes_Click"/>
+                    <Button Content="⚙   Настройки" Style="{StaticResource SideButton}"
+                            Click="Settings_Click"/>
+                    <Button Content="ⓘ   О программе" Style="{StaticResource SideButton}"
+                            Click="About_Click"/>
+                </StackPanel>
+                <StackPanel Grid.Row="2">
+                    <Border Height="1" Background="{StaticResource BorderBrushApp}" Margin="9,0,9,16"/>
+                    <TextBlock x:Name="VersionText" Text="MemPulse" FontSize="12"
+                               FontWeight="SemiBold" Margin="10,0,0,5"/>
+                    <TextBlock Text="Мониторинг памяти Windows" Style="{StaticResource MutedText}"
+                               FontSize="10" TextWrapping="Wrap" Margin="10,0,3,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
 
-                        <Grid Margin="0,24,0,0">
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,6,17">
-                                <TextBlock Text="Доступно" Style="{StaticResource MutedText}"/>
-                                <TextBlock x:Name="AvailableText" FontSize="18" FontWeight="SemiBold" Margin="0,5,0,0" Text="—"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,17">
-                                <TextBlock Text="Системный кэш" Style="{StaticResource MutedText}"/>
-                                <TextBlock x:Name="CacheText" FontSize="18" FontWeight="SemiBold" Margin="0,5,0,0" Text="—"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,6,0">
-                                <TextBlock Text="Выделено" Style="{StaticResource MutedText}"/>
-                                <TextBlock x:Name="CommitText" FontSize="18" FontWeight="SemiBold" Margin="0,5,0,0" Text="—"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="Лимит выделения" Style="{StaticResource MutedText}"/>
-                                <TextBlock x:Name="LimitText" FontSize="18" FontWeight="SemiBold" Margin="0,5,0,0" Text="—"/>
+        <Grid Grid.Row="1" Grid.Column="1" Margin="20,17,20,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="258"/>
+                <RowDefinition Height="16"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="420"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="284"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Memory visual and actual rolling history -->
+            <Border x:Name="OverviewCard" Grid.Row="0" Grid.Column="0"
+                    Background="{StaticResource HeroGlow}" CornerRadius="14"
+                    BorderBrush="#27434D" BorderThickness="1">
+                <Grid Margin="22,19,22,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" LastChildFill="True">
+                        <TextBlock Text="ОПЕРАТИВНАЯ ПАМЯТЬ" Style="{StaticResource CardLabel}"/>
+                        <TextBlock Text="В реальном времени" Style="{StaticResource MutedText}"
+                                   HorizontalAlignment="Right" FontSize="11"/>
+                    </DockPanel>
+                    <Grid Grid.Row="1" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="186"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="166" Height="166" HorizontalAlignment="Left"
+                              VerticalAlignment="Center">
+                            <Ellipse Width="148" Height="148" Stroke="#24434C" StrokeThickness="11"/>
+                            <Path x:Name="UsageArc" Width="166" Height="166" Stroke="#16DEBC"
+                                  StrokeThickness="11" StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" SnapsToDevicePixels="True"/>
+                            <Ellipse x:Name="FullUsageRing" Width="148" Height="148" Stroke="#FF737D"
+                                     StrokeThickness="11" Visibility="Collapsed"/>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Margin="0,-3,0,0">
+                                <TextBlock x:Name="PercentText" Text="—" FontSize="36"
+                                           FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="ЗАНЯТО" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                <TextBlock x:Name="UsedText" Text="—" FontSize="12"
+                                           HorizontalAlignment="Center" Margin="0,7,0,0"/>
                             </StackPanel>
                         </Grid>
-
-                        <Border BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,1,0,0"
-                                Margin="0,24,0,20"/>
-                        <TextBlock Text="ОЧИСТКА ПАМЯТИ" Style="{StaticResource MutedText}" FontWeight="SemiBold"/>
-                        <CheckBox x:Name="StandbyCheck" Content="Кэш ожидания" IsChecked="True"
-                                  Margin="0,14,0,0" ToolTip="Очищает кэш ожидания. Может увеличить нагрузку на диск."/>
-                        <CheckBox x:Name="WorkingCheck" Content="Рабочие наборы процессов"
-                                  ToolTip="Уменьшает рабочие наборы. Возможны задержки и повторная загрузка данных."/>
-                        <CheckBox x:Name="ModifiedCheck" Content="Изменённые страницы"
-                                  ToolTip="Дополнительно: возможны запись на диск и замедление системы."/>
-                        <Button x:Name="CleanButton" Content="Очистить память" Style="{StaticResource PrimaryButton}"
-                                Height="43" Margin="0,20,0,0" Click="Clean_Click"/>
-                        <Button x:Name="ElevateButton" Content="Запуск от администратора"
-                                Style="{StaticResource ActionButton}" Margin="0,9,0,0" Click="Elevate_Click"/>
-                    </StackPanel>
-                </ScrollViewer>
+                        <Grid Grid.Column="1" Margin="10,0,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="ИСТОРИЯ ЗАГРУЗКИ" Style="{StaticResource CardLabel}"
+                                       Margin="0,0,0,7"/>
+                            <Border Grid.Row="1" CornerRadius="7" Background="#112936"
+                                    BorderBrush="#284852" BorderThickness="1" ClipToBounds="True">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" BorderBrush="#28434B" BorderThickness="0,0,0,1"/>
+                                    <Border Grid.Row="1" BorderBrush="#28434B" BorderThickness="0,0,0,1"/>
+                                    <Border Grid.Row="2" BorderBrush="#28434B" BorderThickness="0,0,0,1"/>
+                                    <Canvas x:Name="HistoryCanvas" Grid.RowSpan="4" ClipToBounds="True"
+                                            SizeChanged="HistoryCanvas_SizeChanged">
+                                        <Polygon x:Name="HistoryFill" Fill="{StaticResource GraphFill}"/>
+                                        <Polyline x:Name="HistoryLine" Stroke="#39E6CC"
+                                                  StrokeThickness="2.5" StrokeLineJoin="Round"/>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+                            <Grid Grid.Row="2" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="ДОСТУПНО" Style="{StaticResource CardLabel}"/>
+                                    <TextBlock x:Name="AvailableText" Text="—" FontSize="17"
+                                               FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="ВСЕГО" Style="{StaticResource CardLabel}"/>
+                                    <TextBlock x:Name="TotalText" Text="—" FontSize="17"
+                                               FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
             </Border>
-            <Border Grid.Column="2" Background="{StaticResource PanelBrush}" CornerRadius="13">
-                <Grid>
+
+            <!-- Cleanup controls -->
+            <Border Grid.Row="0" Grid.Column="2" Background="{StaticResource PanelBrush}"
+                    CornerRadius="14" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1">
+                <Grid Margin="17,17,17,14">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <Grid Grid.Row="0" Margin="18,17,18,15">
+                    <TextBlock Text="✦   Очистка памяти" FontSize="16" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Row="1" Text="Выберите операции" Style="{StaticResource MutedText}"
+                               Margin="0,7,0,7"/>
+                    <StackPanel Grid.Row="2">
+                        <CheckBox x:Name="StandbyCheck" IsChecked="True" Content="Кэш ожидания"
+                                  Margin="0,7,0,0" ToolTip="Освобождает standby-страницы. При повторном обращении к данным возможна дополнительная нагрузка на диск."/>
+                        <CheckBox x:Name="WorkingCheck" Content="Рабочие наборы"
+                                  ToolTip="Уменьшает рабочие наборы процессов. Может временно замедлить приложения."/>
+                        <CheckBox x:Name="ModifiedCheck" Content="Изменённые страницы"
+                                  ToolTip="Дополнительная операция: может вызвать запись на диск."/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="3">
+                        <Button x:Name="CleanButton" Content="⚡  Очистить выбранное"
+                                Style="{StaticResource PrimaryButton}" Height="38" Click="Clean_Click"/>
+                        <Button x:Name="ElevateButton" Content="Запустить от администратора"
+                                Style="{StaticResource ActionButton}" Padding="8,6"
+                                Margin="0,7,0,0" Click="Elevate_Click" FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Processes -->
+            <Border Grid.Row="2" Grid.Column="0" Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="14">
+                <Grid Margin="14,16,14,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Margin="4,0,4,13">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Процессы" FontSize="21" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="ProcessCountText" Text="Загрузка процессов…"
-                                       Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
+                            <TextBlock Text="Процессы" FontSize="19" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="ProcessCountText" Text="Получение списка процессов…"
+                                       Style="{StaticResource MutedText}" Margin="0,4,0,0"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Обновить" Style="{StaticResource ActionButton}"
-                                    Padding="12,7" Margin="0,0,8,0" Click="Refresh_Click"/>
-                            <Button x:Name="TrimButton" Content="Очистить процесс"
-                                    Style="{StaticResource ActionButton}" Padding="12,7"
-                                    IsEnabled="False" Click="Trim_Click"
-                                    ToolTip="Уменьшить рабочий набор выбранного процесса."/>
-                        </StackPanel>
+                        <Button Grid.Column="1" Content="↻   Обновить" Style="{StaticResource ActionButton}"
+                                Click="Refresh_Click" Padding="11,8" VerticalAlignment="Center"/>
                     </Grid>
-                    <Grid Grid.Row="1" Margin="12,0,12,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <Grid Margin="6,0,6,12">
-                            <TextBox x:Name="SearchBox" Height="36" VerticalContentAlignment="Center"
-                                     TextChanged="SearchBox_TextChanged" ToolTip="Поиск по имени процесса или PID"/>
-                            <TextBlock x:Name="SearchPlaceholder" Text="Поиск по имени или PID"
-                                       Foreground="{StaticResource MutedBrush}" IsHitTestVisible="False"
-                                       Margin="12,0,0,0" VerticalAlignment="Center"/>
-                        </Grid>
-                        <DataGrid x:Name="ProcessGrid" Grid.Row="1" AutoGenerateColumns="False"
-                                  SelectionChanged="ProcessGrid_SelectionChanged"
-                                  ScrollViewer.CanContentScroll="True" RowHeaderWidth="0"
-                                  AlternationCount="2">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="ПРОЦЕСС" Binding="{Binding Name}" Width="*"
-                                                    SortMemberPath="Name"/>
-                                <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="70"/>
-                                <DataGridTextColumn Header="ОЗУ" Binding="{Binding WorkingText}" Width="105"
-                                                    SortMemberPath="WorkingBytes"/>
-                                <DataGridTextColumn Header="ЧАСТНАЯ" Binding="{Binding PrivateText}" Width="105"
-                                                    SortMemberPath="PrivateBytes"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
+                    <Grid Grid.Row="1" Margin="4,0,4,12">
+                        <TextBox x:Name="SearchBox" Height="34" VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged" ToolTip="Поиск по имени процесса или PID"/>
+                        <TextBlock x:Name="SearchPlaceholder" IsHitTestVisible="False"
+                                   Text="⌕   Поиск по имени или PID" VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0"/>
                     </Grid>
-                    <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrushApp}"
-                            BorderThickness="0,1,0,0" Margin="17,8,17,0">
-                        <TextBlock Text="ОЗУ — рабочий набор, включая общую память. Частная — выделенная процессом память."
-                                   Style="{StaticResource MutedText}" Margin="0,12,0,13"
-                                   TextWrapping="Wrap"/>
-                    </Border>
+                    <DataGrid x:Name="ProcessGrid" Grid.Row="2" AutoGenerateColumns="False"
+                              SelectionChanged="ProcessGrid_SelectionChanged" RowHeaderWidth="0"
+                              AlternationCount="2" ScrollViewer.CanContentScroll="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ПРОЦЕСС" Binding="{Binding Name}"
+                                                Width="*" SortMemberPath="Name"/>
+                            <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="66"/>
+                            <DataGridTextColumn Header="ОЗУ" Binding="{Binding WorkingText}"
+                                                Width="102" SortMemberPath="WorkingBytes"/>
+                            <DataGridTextColumn Header="ЧАСТНАЯ" Binding="{Binding PrivateText}"
+                                                Width="105" SortMemberPath="PrivateBytes"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <Grid Grid.Row="3" Margin="4,10,4,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Память процессов может включать общие страницы."
+                                   Style="{StaticResource MutedText}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <Button x:Name="TrimButton" Grid.Column="1" Content="Очистить процесс"
+                                Style="{StaticResource ActionButton}" Padding="11,7"
+                                IsEnabled="False" Click="Trim_Click"
+                                ToolTip="Уменьшить рабочий набор выбранного процесса."/>
+                    </Grid>
                 </Grid>
             </Border>
+
+            <!-- Compact secondary details and automation -->
+            <Grid Grid.Row="2" Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="{StaticResource PanelBrush}" CornerRadius="14"
+                        BorderThickness="1" BorderBrush="{StaticResource BorderBrushApp}">
+                    <StackPanel Margin="17,16,17,18">
+                        <TextBlock Text="Использование памяти" FontSize="15" FontWeight="SemiBold"/>
+                        <TextBlock Text="СИСТЕМНЫЙ КЭШ" Style="{StaticResource CardLabel}"
+                                   Margin="0,17,0,5"/>
+                        <TextBlock x:Name="CacheText" Text="—" FontSize="19" FontWeight="SemiBold"/>
+                        <Border Height="1" Background="{StaticResource BorderBrushApp}" Margin="0,14,0,0"/>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="ВЫДЕЛЕНО" Style="{StaticResource CardLabel}"/>
+                                <TextBlock x:Name="CommitText" Text="—" FontSize="15" FontWeight="SemiBold"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="ЛИМИТ" Style="{StaticResource CardLabel}"/>
+                                <TextBlock x:Name="LimitText" Text="—" FontSize="15" FontWeight="SemiBold"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Background="{StaticResource HeroGlow}" CornerRadius="14"
+                        BorderThickness="1" BorderBrush="#25444E">
+                    <StackPanel Margin="17,15,17,12">
+                        <DockPanel>
+                            <TextBlock Text="⚙   Автоочистка" FontSize="15"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="AutoCleanStateText" Text="Отключена"
+                                       Foreground="{StaticResource AccentBrush}" FontSize="11"
+                                       HorizontalAlignment="Right" Margin="10,3,0,0"/>
+                        </DockPanel>
+                        <TextBlock x:Name="AutoCleanThresholdText" Text="Порог: 90% · пауза: 15 мин."
+                                   Style="{StaticResource MutedText}" Margin="0,12,0,0"/>
+                        <Button Content="Изменить настройки" Click="Settings_Click"
+                                Style="{StaticResource ActionButton}" Padding="10,7"
+                                Margin="0,15,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Grid>
 
-        <Border Grid.Row="2" Background="#111A25" BorderBrush="{StaticResource BorderBrushApp}"
-                BorderThickness="0,1,0,0">
-            <Grid Margin="20,0">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusText" Text="Готово" Foreground="{StaticResource MutedBrush}"
-                           FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#0A1720"
+                BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,1,0,0">
+            <Grid Margin="22,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Fill="#23DBB7" Width="7" Height="7" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="StatusText" Text="Готово" Foreground="{StaticResource MutedBrush}"
+                               FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
                 <TextBlock x:Name="UpdateText" Grid.Column="1" Text="—"
                            Style="{StaticResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
             </Grid>

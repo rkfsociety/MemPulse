@@ -1,16 +1,16 @@
 <Window x:Class="MemPulse.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xml:lang="ru-RU" Title="Настройки MemPulse" Icon="Assets/MemPulse.png" Width="470" Height="590" MinWidth="440" MinHeight="540"
+        xml:lang="ru-RU" Title="Настройки MemPulse" Icon="Assets/MemPulse.png" Width="492" Height="605" MinWidth="460" MinHeight="555"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="{StaticResource WindowBrush}">
-    <Grid Margin="28,24">
+    <Grid Margin="27,23">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock Text="Настройки" FontSize="25" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
             <TextBlock Text="Мониторинг, автоочистка и запуск" Style="{StaticResource MutedText}"
                        Margin="0,7,0,0"/>
         </StackPanel>

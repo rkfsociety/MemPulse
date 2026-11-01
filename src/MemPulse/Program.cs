@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using MemPulse.Core;
 
@@ -35,6 +36,18 @@ public static class Program
             {
                 StartupLog.Info("Начало проверки создания главного окна");
                 var window = new MainWindow();
+                // Realize the DataGrid templates even without showing the window, so the
+                // packaged startup test catches broken bindings/resources from UI redesigns.
+                int templateCount = 0;
+                foreach (var column in window.ProcessGrid.Columns.OfType<DataGridTemplateColumn>())
+                {
+                    if (column.CellTemplate?.LoadContent() is null)
+                        throw new InvalidOperationException("Не удалось загрузить шаблон колонки таблицы.");
+                    templateCount++;
+                }
+                if (templateCount < 2)
+                    throw new InvalidOperationException("Не найдены шаблоны иконок и показателей памяти.");
+                StartupLog.Info("Проверены " + templateCount + " шаблона таблицы процессов.");
                 StartupLog.Info("Проверка создания главного окна пройдена");
                 window.Close();
                 app.Shutdown();

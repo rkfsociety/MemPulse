@@ -16,5 +16,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\MemPulse.ico" />
+    <Resource Include="Assets\MemPulse.png" />
   </ItemGroup>
 </Project>

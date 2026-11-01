@@ -3,15 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <SolidColorBrush x:Key="WindowBrush" Color="#0B111A"/>
-        <SolidColorBrush x:Key="PanelBrush" Color="#151E2A"/>
-        <SolidColorBrush x:Key="RaisedBrush" Color="#202D3C"/>
-        <SolidColorBrush x:Key="BorderBrushApp" Color="#304052"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#5FE4C1"/>
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="#8DF1D4"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#F1F7FC"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#9CAEBE"/>
-        <SolidColorBrush x:Key="TrackBrush" Color="#2B3948"/>
+        <SolidColorBrush x:Key="WindowBrush" Color="#09121D"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#11202C"/>
+        <SolidColorBrush x:Key="RaisedBrush" Color="#203744"/>
+        <SolidColorBrush x:Key="BorderBrushApp" Color="#294552"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#30E2C1"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#8BF8DE"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#EAF6F8"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#99B1BE"/>
+        <SolidColorBrush x:Key="TrackBrush" Color="#274451"/>
         <Style TargetType="Window">
             <Setter Property="Background" Value="{StaticResource WindowBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -38,7 +38,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="8"
                                 Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -93,12 +93,12 @@
             <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="RowBackground" Value="{StaticResource PanelBrush}"/>
-            <Setter Property="AlternatingRowBackground" Value="#182331"/>
+            <Setter Property="AlternatingRowBackground" Value="#152A36"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="GridLinesVisibility" Value="None"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
-            <Setter Property="RowHeight" Value="43"/>
-            <Setter Property="ColumnHeaderHeight" Value="40"/>
+            <Setter Property="RowHeight" Value="38"/>
+            <Setter Property="ColumnHeaderHeight" Value="38"/>
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="CanUserDeleteRows" Value="False"/>
             <Setter Property="CanUserResizeRows" Value="False"/>
@@ -131,7 +131,7 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#284B51"/>
+                    <Setter Property="Background" Value="#174A4C"/>
                 </Trigger>
             </Style.Triggers>
         </Style>

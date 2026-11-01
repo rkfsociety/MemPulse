@@ -1,63 +1,114 @@
 name: Release MemPulse
 
+# Release automatically when the version in the project file is raised on main.
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release tag (example: v0.1.0)'
-        required: true
-        type: string
   push:
-    tags:
-      - 'v[0-9]*.[0-9]*.[0-9]*'
+    branches: [main]
+    paths:
+      - 'src/MemPulse/MemPulse.csproj'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+# Only one release can be published at a time, even if main receives rapid pushes.
 concurrency:
-  group: mempulse-release-${{ github.ref }}
+  group: mempulse-publish
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - name: Validate release version and commit
+
+      - name: Detect version bump
+        id: version
         shell: pwsh
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_COMMIT: ${{ github.event.before }}
         run: |
-          $tag = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:GITHUB_REF_NAME }
-          if ($tag -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
-            throw "Expected a stable semantic version like v0.1.0: $tag"
+          $ErrorActionPreference = 'Stop'
+          [xml]$project = Get-Content 'src/MemPulse/MemPulse.csproj' -Raw
+          $version = [string]$project.Project.PropertyGroup.Version
+          $versionPattern = '^((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))$'
+          if ($version -cnotmatch $versionPattern) {
+            throw "Project version must be MAJOR.MINOR.PATCH (without a v prefix): $version"
           }
-          git fetch origin main
-          git merge-base --is-ancestor HEAD origin/main
-          if ($LASTEXITCODE -ne 0) { throw 'Release commit must be on main.' }
+
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $before = $env:BEFORE_COMMIT
+            if ([string]::IsNullOrEmpty($before) -or $before -match '^0{40}$') {
+              throw 'Previous main commit was not provided; cannot verify a version change.'
+            }
+            $previousSpec = "$($before):src/MemPulse/MemPulse.csproj"
+            $previousText = @(git show $previousSpec) -join "`n"
+            if ($LASTEXITCODE -ne 0) { throw "Cannot read previous project from $before" }
+            [xml]$previousProject = $previousText
+            $oldVersion = [string]$previousProject.Project.PropertyGroup.Version
+            if ($oldVersion -eq $version) {
+              Write-Host "Version unchanged ($version). No tag or release will be created."
+              "publish=false" >> $env:GITHUB_OUTPUT
+              exit 0
+            }
+            if ($oldVersion -notmatch $versionPattern) {
+              throw "Previous project version is invalid: $oldVersion"
+            }
+            if ([version]$version -le [version]$oldVersion) {
+              throw "Version must increase: $oldVersion -> $version"
+            }
+          }
+
+          $tag = "v$version"
+          # Never recreate or overwrite a version that was already tagged.
+          $alreadyTagged = @(git tag --list $tag)
+          if ($alreadyTagged.Count -gt 0) {
+            throw "Tag $tag already exists. Increase the project version to publish a new release."
+          }
+          foreach ($existing in @(git tag --list 'v*')) {
+            if ($existing -cmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+              if ([version]$existing.Substring(1) -ge [version]$version) {
+                throw "New version $version must be higher than existing tag $existing."
+              }
+            }
+          }
+
+          Write-Host "New version: $version -> $tag (commit $env:GITHUB_SHA)"
           "TAG=$tag" >> $env:GITHUB_ENV
-          "APP_VERSION=$($tag.Substring(1))" >> $env:GITHUB_ENV
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+          "publish=true" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.version.outputs.publish == 'true'
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Build
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: dotnet build src/MemPulse/MemPulse.csproj --configuration Release --warnaserror -p:Version=$env:APP_VERSION
+
       - name: Smoke tests
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: dotnet run --project tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
+
       - name: Publish self-contained executable
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: |
           dotnet publish src/MemPulse/MemPulse.csproj --configuration Release --runtime win-x64 --self-contained true -p:Version=$env:APP_VERSION -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish
+
       - name: Build per-user installer
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: ./scripts/build-installer.ps1 -Version $env:APP_VERSION
+
       - name: Generate SHA-256 checksums
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: |
           $paths = @('publish/MemPulse.exe', 'dist/MemPulse-Setup-x64.exe')
@@ -66,12 +117,15 @@ jobs:
             "$hash  $([IO.Path]::GetFileName($path))"
           }
           $lines | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
-      - name: Create GitHub Release with installer and portable app
+
+      - name: Create version tag and publish GitHub Release
+        if: steps.version.outputs.publish == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # gh release create rejects a tag that already has a release; do not use --clobber.
+          # 'gh release create' creates the Git tag automatically if it does not exist.
+          # It then publishes the same commit and attaches verified build artifacts.
           gh release create $env:TAG `
             "dist/MemPulse-Setup-x64.exe" `
             "publish/MemPulse.exe" `

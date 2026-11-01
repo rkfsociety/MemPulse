@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer = new();
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _tray;
+    private System.Drawing.Icon? _trayIcon;
+    private int? _lastTrayPercent;
     private bool _refreshing;
     private bool _cleaning;
     private bool _forceExit;
@@ -166,6 +168,7 @@ public partial class MainWindow : Window
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
             TotalText.Text = Format.Bytes(memory.Total) + " installed";
             UsageBar.Value = memory.UsedPercent;
+            UpdateTray(memory);
             AvailableText.Text = Format.Bytes(memory.Available);
             CacheText.Text = Format.Bytes(memory.Cache);
             CommitText.Text = Format.Bytes(memory.Committed);
@@ -351,10 +354,18 @@ public partial class MainWindow : Window
 
     private void InitializeTray()
     {
+        // Load the same embedded icon that is compiled into MemPulse.exe and used by WPF windows.
+        var resource = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Assets/MemPulse.ico"))
+            ?? throw new InvalidOperationException("Embedded MemPulse icon was not found.");
+        using (resource.Stream)
+        using (var brandIcon = new System.Drawing.Icon(resource.Stream, new System.Drawing.Size(32, 32)))
+            _trayIcon = (System.Drawing.Icon)brandIcon.Clone();
+
         _tray = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
-            Text = "MemPulse — memory monitor",
+            Icon = _trayIcon,
+            Text = "MemPulse — ожидание данных ОЗУ",
             Visible = true
         };
         var menu = new Forms.ContextMenuStrip();
@@ -374,6 +385,32 @@ public partial class MainWindow : Window
         })));
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => Dispatcher.BeginInvoke(new Action(ShowFromTray));
+    }
+
+    private void UpdateTray(MemoryUsage memory)
+    {
+        if (_tray is null) return;
+
+        int percent = Math.Clamp((int)Math.Round(memory.UsedPercent,
+            MidpointRounding.AwayFromZero), 0, 100);
+        _tray.Text = $"MemPulse | ОЗУ {percent}% ({Format.Bytes(memory.Used)} / {Format.Bytes(memory.Total)})";
+
+        if (_lastTrayPercent == percent) return;
+
+        var nextIcon = TrayIconRenderer.Create(percent);
+        var previousIcon = _trayIcon;
+        try
+        {
+            _tray.Icon = nextIcon;
+            _trayIcon = nextIcon;
+            _lastTrayPercent = percent;
+            previousIcon?.Dispose();
+        }
+        catch
+        {
+            nextIcon.Dispose();
+            throw;
+        }
     }
 
     private void ShowFromTray()
@@ -410,6 +447,8 @@ public partial class MainWindow : Window
             _tray.Dispose();
             _tray = null;
         }
+        _trayIcon?.Dispose();
+        _trayIcon = null;
     }
 
     private void SetStatus(string text) => StatusText.Text = text;

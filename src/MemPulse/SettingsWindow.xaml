@@ -1,7 +1,7 @@
 <Window x:Class="MemPulse.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MemPulse settings" Width="470" Height="590" MinWidth="440" MinHeight="540"
+        Title="MemPulse settings" Icon="Assets/MemPulse.ico" Width="470" Height="590" MinWidth="440" MinHeight="540"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="{StaticResource WindowBrush}">
     <Grid Margin="28,24">
         <Grid.RowDefinitions>

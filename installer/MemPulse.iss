@@ -18,6 +18,7 @@ AppUpdatesURL=https://github.com/rkfsociety/MemPulse/releases/latest
 DefaultDirName={localappdata}\Programs\MemPulse
 DefaultGroupName=MemPulse
 UninstallDisplayIcon={app}\{#AppExeName}
+SetupIconFile=..\src\MemPulse\Assets\MemPulse.ico
 OutputDir=..\dist
 OutputBaseFilename=MemPulse-Setup-x64
 Compression=lzma2

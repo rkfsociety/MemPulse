@@ -44,7 +44,8 @@
                     <Setter Property="Background" Value="#203946"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#225453"/>
+                    <Setter Property="Background" Value="#204751"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -141,7 +142,7 @@
         <Grid Grid.Row="1" Grid.Column="1">
 <Grid x:Name="OverviewPage" Margin="20,17,20,16">
             <Grid.RowDefinitions>
-                <RowDefinition Height="258"/>
+                <RowDefinition Height="Auto" MinHeight="272"/>
                 <RowDefinition Height="16"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
@@ -279,7 +280,7 @@
                     </StackPanel>
                     <StackPanel Grid.Row="3">
                         <Button x:Name="CleanButton" Content="⚡  Очистить выбранное"
-                                Style="{StaticResource PrimaryButton}" Height="38" Click="Clean_Click"/>
+                                Style="{StaticResource PrimaryButton}" Height="44" MinHeight="44" Click="Clean_Click"/>
                         <Button x:Name="ElevateButton" Content="Запустить от администратора"
                                 Style="{StaticResource ActionButton}" Padding="8,6"
                                 Margin="0,7,0,0" Click="Elevate_Click" FontSize="11"/>
@@ -317,7 +318,7 @@
                                    Text="⌕   Поиск приложения или PID" VerticalAlignment="Center"
                                    Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0"/>
                     </Grid>
-                    <DataGrid x:Name="ProcessGrid" Grid.Row="2" AutoGenerateColumns="False"
+                    <DataGrid x:Name="ProcessGrid" Background="{StaticResource PanelBrush}" Grid.Row="2" AutoGenerateColumns="False"
                               SelectionChanged="ProcessGrid_SelectionChanged" RowHeaderWidth="0"
                               AlternationCount="2" ScrollViewer.CanContentScroll="True"
                               RowStyle="{StaticResource ProcessRowStyle}" RowHeight="46"
@@ -468,26 +469,30 @@
     <TextBlock x:Name="GroupSearchPlaceholder" Text="⌕   Поиск по имени или PID" IsHitTestVisible="False" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="12,0"/>
    </Grid>
    <DataGrid x:Name="GroupGrid" Grid.Row="2" AutoGenerateColumns="False" RowHeaderWidth="0" RowHeight="49"
+             Background="{StaticResource PanelBrush}" Foreground="{StaticResource TextBrush}"
              RowStyle="{StaticResource ProcessRowStyle}" RowDetailsVisibilityMode="VisibleWhenSelected"
              ColumnHeaderHeight="38" ScrollViewer.CanContentScroll="True">
     <DataGrid.RowDetailsTemplate>
      <DataTemplate>
-      <Border Background="#182E3A" Padding="13,12" Margin="0,0,0,4" BorderBrush="#31505B" BorderThickness="0,1,0,1">
+      <Border Background="#142936" Padding="14,13" Margin="0,0,0,6" BorderBrush="#31505B" BorderThickness="0,1,0,1">
        <StackPanel>
         <TextBlock Text="ОТДЕЛЬНЫЕ ПРОЦЕССЫ" Style="{StaticResource MutedText}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-        <ItemsControl ItemsSource="{Binding Members}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      MaxHeight="342" Background="Transparent">
+         <ItemsControl ItemsSource="{Binding Members}">
          <ItemsControl.ItemTemplate>
           <DataTemplate>
-           <Grid Height="36">
+           <Grid Height="39" Background="Transparent">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="125"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Name}" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             <TextBlock Text="{Binding Pid}" Grid.Column="1" VerticalAlignment="Center"/>
             <TextBlock Text="{Binding WorkingText}" Grid.Column="2" VerticalAlignment="Center"/>
-            <Button Grid.Column="3" Content="Очистить PID" Tag="{Binding}" Click="TrimMember_Click" Style="{StaticResource ActionButton}" Padding="7,4" FontSize="11" Margin="0,2,6,2"/>
+            <Button Grid.Column="3" Content="Очистить PID" Tag="{Binding}" Click="TrimMember_Click" Style="{StaticResource ActionButton}" Padding="9,5" FontSize="11" Margin="0,3,8,3"/>
            </Grid>
           </DataTemplate>
          </ItemsControl.ItemTemplate>
         </ItemsControl>
+        </ScrollViewer>
        </StackPanel>
       </Border>
      </DataTemplate>

@@ -83,11 +83,51 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Crisp, themed checkboxes instead of stock white Windows controls. -->
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Margin" Value="0,8,0,0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="23"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="TickBox" Width="17" Height="17" CornerRadius="4"
+                                    Background="#162B37" BorderBrush="#50717D" BorderThickness="1"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <Path x:Name="Tick" Data="M 3,8 L 6.5,11 L 13,4"
+                                      Stroke="#0B2729" StrokeThickness="2.2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="TickBox" Property="Background"
+                                        Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="TickBox" Property="BorderBrush"
+                                        Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TickBox" Property="BorderBrush"
+                                        Value="{StaticResource AccentHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="TickBox" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="{StaticResource PanelBrush}"/>

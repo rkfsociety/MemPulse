@@ -25,20 +25,20 @@ public sealed class CleanupService
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages) return report;
         if (!IsElevated)
         {
-            report.Steps.Add(new CleanupStep("Administrator required", false, "Restart MemPulse as administrator."));
+            report.Steps.Add(new CleanupStep("Нужны права администратора", false, "Перезапустите MemPulse от имени администратора."));
             return report;
         }
         if (!EnablePrivilege("SeProfileSingleProcessPrivilege"))
         {
-            report.Steps.Add(new CleanupStep("Privilege", false, "SeProfileSingleProcessPrivilege is unavailable."));
+            report.Steps.Add(new CleanupStep("Привилегия", false, "Недоступна привилегия SeProfileSingleProcessPrivilege."));
             return report;
         }
 
         // SystemMemoryListInformation is an undocumented Windows interface. Errors are reported,
         // never silently treated as success; individual operations are intentionally optional.
-        if (options.Standby) Run(report, 4, "Standby cache");
-        if (options.WorkingSets) Run(report, 2, "System working sets");
-        if (options.ModifiedPages) Run(report, 3, "Modified pages");
+        if (options.Standby) Run(report, 4, "Кэш ожидания");
+        if (options.WorkingSets) Run(report, 2, "Рабочие наборы процессов");
+        if (options.ModifiedPages) Run(report, 3, "Изменённые страницы");
         return report;
     }
 
@@ -47,13 +47,13 @@ public sealed class CleanupService
         var report = new CleanupReport();
         if (pid <= 0)
         {
-            report.Steps.Add(new CleanupStep("Process", false, "Invalid PID."));
+            report.Steps.Add(new CleanupStep("Процесс", false, "Некорректный PID."));
             return report;
         }
         IntPtr handle = Native.OpenProcess(ProcessSetQuota | ProcessQueryLimitedInformation, false, pid);
         if (handle == IntPtr.Zero)
         {
-            report.Steps.Add(new CleanupStep("Process " + pid, false,
+            report.Steps.Add(new CleanupStep("Процесс " + pid, false,
                 new Win32Exception(Marshal.GetLastWin32Error()).Message));
             return report;
         }
@@ -61,7 +61,7 @@ public sealed class CleanupService
         {
             bool ok = Native.EmptyWorkingSet(handle);
             report.Steps.Add(new CleanupStep("Process " + pid, ok,
-                ok ? "Working set trimmed." : new Win32Exception(Marshal.GetLastWin32Error()).Message));
+                ok ? "Рабочий набор уменьшен." : new Win32Exception(Marshal.GetLastWin32Error()).Message));
         }
         finally { Native.CloseHandle(handle); }
         return report;
@@ -74,7 +74,7 @@ public sealed class CleanupService
             int status = Native.NtSetSystemInformation(SystemMemoryListInformation, ref command, sizeof(int));
             bool ok = status >= 0;
             report.Steps.Add(new CleanupStep(label, ok,
-                ok ? "Requested." : "NTSTATUS 0x" + unchecked((uint)status).ToString("X8")));
+                ok ? "Запрошено." : "NTSTATUS 0x" + unchecked((uint)status).ToString("X8")));
         }
         catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
         {

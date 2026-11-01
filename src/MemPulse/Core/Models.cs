@@ -21,10 +21,23 @@ public static class Format
     public static string Bytes(ulong bytes)
     {
         double size = bytes;
-        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ", "ПБ"];
         int index = 0;
         while (size >= 1024 && index < units.Length - 1) { size /= 1024; index++; }
         return size.ToString(index == 0 ? "0" : "0.0", CultureInfo.CurrentCulture) + " " + units[index];
+    }
+}
+
+public static class RussianText
+{
+    public static string Processes(int count)
+    {
+        int lastTwo = count % 100;
+        int last = count % 10;
+        string noun = lastTwo is >= 11 and <= 14 ? "процессов"
+            : last == 1 ? "процесс"
+            : last is >= 2 and <= 4 ? "процесса" : "процессов";
+        return count + " " + noun;
     }
 }
 
@@ -58,7 +71,7 @@ public sealed class CleanupReport
 {
     public List<CleanupStep> Steps { get; } = [];
     public bool AnySuccess => Steps.Any(step => step.Success);
-    public string Summary => Steps.Count == 0 ? "No operations selected." :
+    public string Summary => Steps.Count == 0 ? "Операции не выбраны." :
         string.Join(" · ", Steps.Select(step => (step.Success ? "✓ " : "✕ ") + step.Name +
             (step.Success ? "" : " (" + step.Details + ")")));
 }

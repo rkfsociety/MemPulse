@@ -59,13 +59,13 @@ public static class StartupService
         if (!enabled) { key.DeleteValue(ValueName, false); return; }
 
         string executable = Environment.ProcessPath
-            ?? throw new InvalidOperationException("Application executable could not be located.");
+            ?? throw new InvalidOperationException("Не удалось определить путь к исполняемому файлу.");
         string command = "\"" + executable + "\"";
         if (string.Equals(Path.GetFileName(executable), "dotnet.exe", StringComparison.OrdinalIgnoreCase))
         {
             var assemblyPath = System.Reflection.Assembly.GetEntryAssembly()?.Location;
             if (string.IsNullOrWhiteSpace(assemblyPath))
-                throw new InvalidOperationException("The app must be published before enabling startup.");
+                throw new InvalidOperationException("Для включения автозапуска сначала необходимо опубликовать приложение.");
             command += " \"" + assemblyPath + "\"";
         }
         key.SetValue(ValueName, command, RegistryValueKind.String);

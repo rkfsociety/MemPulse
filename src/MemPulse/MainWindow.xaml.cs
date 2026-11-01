@@ -50,14 +50,14 @@ public partial class MainWindow : Window
     {
         _settings = _store.Load();
         try { _settings.StartWithWindows = StartupService.IsEnabled(); }
-        catch (Exception ex) { SetStatus("Startup setting unavailable: " + ex.Message); }
+        catch (Exception ex) { SetStatus("Не удалось прочитать автозапуск: " + ex.Message); }
 
         ElevateButton.Visibility = CleanupService.IsElevated ? Visibility.Collapsed : Visibility.Visible;
         CleanButton.IsEnabled = CleanupService.IsElevated;
         InitializeTray();
         ConfigureTimer();
-        if (CleanupService.IsElevated) SetStatus("Administrator mode · cleanup available");
-        else SetStatus("Monitoring active · administrator access required for system cleanup");
+        if (CleanupService.IsElevated) SetStatus("Режим администратора · очистка доступна");
+        else SetStatus("Мониторинг включён · для системной очистки нужны права администратора");
         await RefreshAsync();
         ConfigureUpdateTimer();
         if (_settings.CheckForUpdates) await CheckUpdatesAsync(false);
@@ -80,23 +80,23 @@ public partial class MainWindow : Window
             _availableUpdate = update;
             if (update is not null)
             {
-                UpdateButton.Content = "Install v" + update.Version;
+                UpdateButton.Content = "Установить v" + update.Version;
                 UpdateButton.Background = (System.Windows.Media.Brush)FindResource("AccentBrush");
                 UpdateButton.Foreground = new System.Windows.Media.SolidColorBrush(
                     System.Windows.Media.Color.FromRgb(16, 33, 40));
-                SetStatus("MemPulse " + update.Version + " is available.");
+                SetStatus("Доступна новая версия MemPulse: " + update.Version);
             }
             else
             {
-                UpdateButton.Content = "Check updates";
+                UpdateButton.Content = "Обновления";
                 UpdateButton.Background = (System.Windows.Media.Brush)FindResource("RaisedBrush");
                 UpdateButton.Foreground = (System.Windows.Media.Brush)FindResource("TextBrush");
-                if (manual) SetStatus("MemPulse is up to date (v" + UpdateService.CurrentVersion + ").");
+                if (manual) SetStatus("Установлена актуальная версия MemPulse (v" + UpdateService.CurrentVersion + ").");
             }
         }
         catch (Exception ex)
         {
-            if (manual) SetStatus("Update check failed: " + ex.Message);
+            if (manual) SetStatus("Не удалось проверить обновления: " + ex.Message);
         }
         finally
         {
@@ -116,9 +116,9 @@ public partial class MainWindow : Window
 
         var update = _availableUpdate;
         if (MessageBox.Show(this,
-                "Download and install MemPulse v" + update.Version +
-                "? The application will close and the installer will open.",
-                "Install MemPulse update", MessageBoxButton.YesNo,
+                "Скачать и установить MemPulse v" + update.Version +
+                "? Программа закроется и запустит мастер установки.",
+                "Обновление MemPulse", MessageBoxButton.YesNo,
                 MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
@@ -127,17 +127,17 @@ public partial class MainWindow : Window
         try
         {
             var progress = new Progress<double>(percent =>
-                SetStatus("Downloading verified update: " + percent.ToString("0") + "%"));
+                SetStatus("Загрузка обновления (с проверкой): " + percent.ToString("0") + "%"));
             string setup = await _updates.DownloadAsync(update, progress);
             var process = Process.Start(new ProcessStartInfo(setup) { UseShellExecute = true });
-            if (process is null) throw new InvalidOperationException("Installer did not start.");
+            if (process is null) throw new InvalidOperationException("Не удалось запустить установщик.");
 
             _forceExit = true;
             Close(); // Exit even if close-to-tray is enabled so installer can replace the executable.
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Update could not be installed",
+            MessageBox.Show(this, ex.Message, "Ошибка установки обновления",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -166,7 +166,7 @@ public partial class MainWindow : Window
 
             UsedText.Text = Format.Bytes(memory.Used);
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
-            TotalText.Text = Format.Bytes(memory.Total) + " installed";
+            TotalText.Text = Format.Bytes(memory.Total) + " всего";
             UsageBar.Value = memory.UsedPercent;
             UpdateTray(memory);
             AvailableText.Text = Format.Bytes(memory.Available);
@@ -179,8 +179,8 @@ public partial class MainWindow : Window
             foreach (var row in processes) _processes.Add(row);
             if (selectedPid.HasValue)
                 ProcessGrid.SelectedItem = _processes.FirstOrDefault(row => row.Pid == selectedPid.Value);
-            ProcessCountText.Text = processes.Count + " processes · working-set RAM";
-            UpdateText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
+            ProcessCountText.Text = RussianText.Processes(processes.Count) + " · память процессов";
+            UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean && CleanupService.IsElevated &&
                 memory.UsedPercent >= _settings.AutoCleanThreshold &&
@@ -194,7 +194,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetStatus("Refresh failed: " + ex.Message);
+            SetStatus("Ошибка обновления данных: " + ex.Message);
         }
         finally { _refreshing = false; }
     }
@@ -233,13 +233,13 @@ public partial class MainWindow : Window
             ModifiedCheck.IsChecked == true);
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
         {
-            SetStatus("Choose at least one cleanup operation.");
+            SetStatus("Выберите хотя бы одну операцию очистки.");
             return;
         }
         if ((options.WorkingSets || options.ModifiedPages) &&
             MessageBox.Show(this,
-                "Trimming working sets or flushing modified pages can temporarily slow down Windows and applications. Continue?",
-                "Confirm advanced cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                "Очистка рабочих наборов и изменённых страниц может временно замедлить работу Windows и программ. Продолжить?",
+                "Подтверждение очистки", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
         await RunCleanupAsync(options, false);
         await RefreshAsync();
@@ -254,11 +254,11 @@ public partial class MainWindow : Window
         try
         {
             var report = await Task.Run(() => _cleaner.Clean(options));
-            SetStatus((automatic ? "Auto-clean: " : "Cleanup: ") + report.Summary);
+            SetStatus((automatic ? "Автоочистка: " : "Очистка: ") + report.Summary);
         }
         catch (Exception ex)
         {
-            SetStatus("Cleanup failed: " + ex.Message);
+            SetStatus("Ошибка очистки: " + ex.Message);
         }
         finally
         {
@@ -272,9 +272,9 @@ public partial class MainWindow : Window
     {
         if (_cleaning || ProcessGrid.SelectedItem is not ProcessUsage selected) return;
         if (MessageBox.Show(this,
-                "Trim the working set of " + selected.Name + " (PID " + selected.Pid +
-                ")? Its memory may be paged back in and the process may slow down.",
-                "Trim process memory", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                "Уменьшить рабочий набор процесса " + selected.Name + " (PID " + selected.Pid +
+                ")? Данные могут быть повторно загружены в ОЗУ, а процесс — временно замедлиться.",
+                "Очистка памяти процесса", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
         _cleaning = true;
@@ -285,7 +285,7 @@ public partial class MainWindow : Window
             var report = await Task.Run(() => _cleaner.TrimProcess(selected.Pid));
             SetStatus(report.Summary);
         }
-        catch (Exception ex) { SetStatus("Trim failed: " + ex.Message); }
+        catch (Exception ex) { SetStatus("Ошибка очистки процесса: " + ex.Message); }
         finally
         {
             _cleaning = false;
@@ -308,11 +308,11 @@ public partial class MainWindow : Window
             ConfigureTimer();
             ConfigureUpdateTimer();
             if (next.CheckForUpdates) _ = CheckUpdatesAsync(false);
-            SetStatus("Settings saved.");
+            SetStatus("Настройки сохранены.");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Could not save settings",
+            MessageBox.Show(this, ex.Message, "Не удалось сохранить настройки",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -322,7 +322,7 @@ public partial class MainWindow : Window
         try
         {
             var executable = Environment.ProcessPath ??
-                throw new InvalidOperationException("Application executable not found.");
+                throw new InvalidOperationException("Не удалось найти исполняемый файл программы.");
             var start = new ProcessStartInfo(executable)
             {
                 UseShellExecute = true,
@@ -333,7 +333,7 @@ public partial class MainWindow : Window
             {
                 var dll = System.Reflection.Assembly.GetEntryAssembly()?.Location;
                 if (string.IsNullOrWhiteSpace(dll))
-                    throw new InvalidOperationException("Publish the application before elevating.");
+                    throw new InvalidOperationException("Для запуска от администратора сначала опубликуйте приложение.");
                 start.Arguments = "\"" + dll + "\"";
             }
             if (Process.Start(start) is not null)
@@ -344,11 +344,11 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
-            SetStatus("Administrator request canceled.");
+            SetStatus("Запрос прав администратора отменён.");
         }
         catch (Exception ex)
         {
-            SetStatus("Unable to restart elevated: " + ex.Message);
+            SetStatus("Не удалось перезапустить от администратора: " + ex.Message);
         }
     }
 
@@ -357,7 +357,7 @@ public partial class MainWindow : Window
         // Load the same embedded icon that is compiled into MemPulse.exe and used by WPF windows.
         var resource = System.Windows.Application.GetResourceStream(
             new Uri("pack://application:,,,/Assets/MemPulse.ico"))
-            ?? throw new InvalidOperationException("Embedded MemPulse icon was not found.");
+            ?? throw new InvalidOperationException("Не найдена встроенная иконка MemPulse.");
         using (resource.Stream)
         using (var brandIcon = new System.Drawing.Icon(resource.Stream, new System.Drawing.Size(32, 32)))
             _trayIcon = (System.Drawing.Icon)brandIcon.Clone();
@@ -369,8 +369,8 @@ public partial class MainWindow : Window
             Visible = true
         };
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("Open MemPulse", null, (_, _) => Dispatcher.BeginInvoke(new Action(ShowFromTray)));
-        menu.Items.Add("Clean standby cache", null, (_, _) => Dispatcher.BeginInvoke(
+        menu.Items.Add("Открыть MemPulse", null, (_, _) => Dispatcher.BeginInvoke(new Action(ShowFromTray)));
+        menu.Items.Add("Очистить кэш ожидания", null, (_, _) => Dispatcher.BeginInvoke(
             new Action(async () =>
             {
                 ShowFromTray();
@@ -378,7 +378,7 @@ public partial class MainWindow : Window
                 await RefreshAsync();
             })));
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+        menu.Items.Add("Выход", null, (_, _) => Dispatcher.BeginInvoke(new Action(() =>
         {
             _forceExit = true;
             Close();

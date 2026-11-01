@@ -83,7 +83,7 @@ public sealed class UpdateService
                 !IsExpectedAssetUrl(installerUrl, tag!) ||
                 digest is null || !Regex.IsMatch(digest, @"^sha256:[a-fA-F0-9]{64}$",
                     RegexOptions.CultureInvariant))
-                throw new InvalidDataException("Release installer URL or SHA-256 digest is missing or invalid.");
+                throw new InvalidDataException("Некорректная ссылка на установщик или контрольная сумма SHA-256 релиза.");
 
             return new AvailableUpdate(version, tag!, installerUrl,
                 Convert.FromHexString(digest[7..]),
@@ -96,7 +96,7 @@ public sealed class UpdateService
         IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!IsExpectedAssetUrl(update.InstallerUrl, update.Tag) || update.Sha256.Length != 32)
-            throw new InvalidDataException("Invalid update metadata.");
+            throw new InvalidDataException("Некорректные сведения об обновлении.");
 
         string folder = Path.Combine(Path.GetTempPath(), "MemPulse", "Updates");
         Directory.CreateDirectory(folder);
@@ -108,7 +108,7 @@ public sealed class UpdateService
                 HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             var declared = response.Content.Headers.ContentLength;
-            if (declared > MaxInstallerBytes) throw new InvalidDataException("Update exceeds size limit.");
+            if (declared > MaxInstallerBytes) throw new InvalidDataException("Размер обновления превышает допустимый предел.");
 
             await using var network = await response.Content.ReadAsStreamAsync(cancellationToken);
             await using var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write,
@@ -123,7 +123,7 @@ public sealed class UpdateService
                 {
                     downloaded += count;
                     if (downloaded > MaxInstallerBytes)
-                        throw new InvalidDataException("Update exceeds size limit.");
+                        throw new InvalidDataException("Размер обновления превышает допустимый предел.");
                     sha.AppendData(buffer, 0, count);
                     await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
                     if (declared is > 0)
@@ -133,9 +133,9 @@ public sealed class UpdateService
             finally { ArrayPool<byte>.Shared.Return(buffer); }
             await output.FlushAsync(cancellationToken);
             if (declared is > 0 && downloaded != declared.Value)
-                throw new InvalidDataException("Incomplete installer download.");
+                throw new InvalidDataException("Файл установщика загружен не полностью.");
             if (!CryptographicOperations.FixedTimeEquals(sha.GetHashAndReset(), update.Sha256))
-                throw new InvalidDataException("Downloaded installer failed SHA-256 verification.");
+                throw new InvalidDataException("Контрольная сумма SHA-256 установщика не совпадает.");
 
             output.Close();
             File.Move(staging, destination, true);

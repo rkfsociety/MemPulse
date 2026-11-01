@@ -10,7 +10,7 @@ public sealed class MonitoringService
     {
         var status = new Native.MEMORYSTATUSEX { Length = (uint)Marshal.SizeOf<Native.MEMORYSTATUSEX>() };
         if (!Native.GlobalMemoryStatusEx(ref status))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to read system memory.");
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Не удалось получить сведения об оперативной памяти.");
         ulong cache = 0, committed = 0, commitLimit = 0;
         if (Native.GetPerformanceInfo(out var info, (uint)Marshal.SizeOf<Native.PERFORMANCE_INFORMATION>()))
         {

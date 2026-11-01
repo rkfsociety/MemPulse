@@ -3,7 +3,7 @@
 #endif
 
 #define AppName "MemPulse"
-#define AppPublisher "MemPulse contributors"
+#define AppPublisher "Разработчики MemPulse"
 #define AppExeName "MemPulse.exe"
 
 [Setup]
@@ -31,6 +31,9 @@ CloseApplications=yes
 RestartApplications=no
 UsePreviousAppDir=yes
 
+[Languages]
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+
 [Files]
 Source: "..\publish\MemPulse.exe"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -39,7 +42,7 @@ Name: "{autoprograms}\MemPulse"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\MemPulse"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch MemPulse"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Запустить MemPulse"; Flags: nowait postinstall skipifsilent

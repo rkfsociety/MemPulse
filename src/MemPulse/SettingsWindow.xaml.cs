@@ -33,8 +33,8 @@ public partial class SettingsWindow : Window
             !int.TryParse(CooldownText.Text, out var cooldown) || cooldown is < 5 or > 120)
         {
             MessageBox.Show(this,
-                "Refresh: 1–10 seconds. Threshold: 70–98%. Cooldown: 5–120 minutes.",
-                "Invalid settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "Интервал обновления: 1–10 сек. Порог: 70–98%. Пауза: 5–120 мин.",
+                "Некорректные настройки", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         Result = new AppSettings

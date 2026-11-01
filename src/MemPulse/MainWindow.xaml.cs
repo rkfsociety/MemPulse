@@ -23,7 +23,11 @@ public partial class MainWindow : Window
     private AvailableUpdate? _availableUpdate;
     private bool _checkingUpdates;
     private bool _installingUpdate;
-    private readonly ProcessSnapshotCollection<ProcessUsage> _processes = [];
+    private readonly ProcessSnapshotCollection<ProcessGroupUsage> _groups = [];
+    private readonly ListCollectionView _overviewView;
+    private readonly ListCollectionView _detailView;
+    private enum Section { Overview, Processes, Settings, About }
+    private Section _activeSection;
     private readonly DispatcherTimer _timer = new();
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _tray;
@@ -38,11 +42,17 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        ProcessGrid.ItemsSource = _processes;
-        var view = CollectionViewSource.GetDefaultView(_processes);
-        view.SortDescriptions.Add(new SortDescription(nameof(ProcessUsage.WorkingBytes),
+        _overviewView = new ListCollectionView(_groups);
+        _detailView = new ListCollectionView(_groups);
+        _overviewView.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.WorkingBytes),
             ListSortDirection.Descending));
-        view.Filter = FilterProcess;
+        _detailView.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.WorkingBytes),
+            ListSortDirection.Descending));
+        _overviewView.Filter = FilterProcess;
+        _detailView.Filter = FilterGroup;
+        ProcessGrid.ItemsSource = _overviewView;
+        GroupGrid.ItemsSource = _detailView;
+        ActivateSection(Section.Overview);
         _timer.Tick += async (_, _) => await RefreshAsync();
         _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
     }
@@ -56,6 +66,8 @@ public partial class MainWindow : Window
         catch (Exception ex) { SetStatus("Не удалось прочитать автозапуск: " + ex.Message); }
 
         VersionText.Text = "MemPulse  ·  v" + UpdateService.CurrentVersion;
+        AboutVersionText.Text = "Версия " + UpdateService.CurrentVersion + " · Windows x64";
+        LoadSettingsControls();
         UpdateAutomationSummary();
         ElevateButton.Visibility = CleanupService.IsElevated ? Visibility.Collapsed : Visibility.Visible;
         CleanButton.IsEnabled = CleanupService.IsElevated;
@@ -182,10 +194,12 @@ public partial class MainWindow : Window
             {
                 var usage = _monitor.ReadMemory();
                 var snapshot = _monitor.ReadProcesses();
-                return (usage, _processIcons.Decorate(snapshot));
+                var decorated = _processIcons.Decorate(snapshot);
+                return (usage, ProcessGrouping.Build(decorated), snapshot.Count);
             });
             var memory = result.Item1;
-            var processes = result.Item2;
+            var groups = result.Item2;
+            var totalProcesses = result.Item3;
 
             UsedText.Text = Format.Bytes(memory.Used);
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
@@ -201,7 +215,7 @@ public partial class MainWindow : Window
             CommitText.Text = Format.Bytes(memory.Committed);
             LimitText.Text = Format.Bytes(memory.CommitLimit);
 
-            ApplyProcessSnapshot(processes);
+            ApplyProcessSnapshot(groups, totalProcesses);
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean && CleanupService.IsElevated &&
@@ -222,76 +236,93 @@ public partial class MainWindow : Window
         finally { _refreshing = false; }
     }
 
-    private void ApplyProcessSnapshot(IReadOnlyList<ProcessUsage> processes)
+    private void ApplyProcessSnapshot(IReadOnlyList<ProcessGroupUsage> groups, int processCount)
     {
-        int? selectedPid = (ProcessGrid.SelectedItem as ProcessUsage)?.Pid;
-        // A single Reset event keeps WPF's sorted/filtered CollectionView consistent.
-        // DeferRefresh() must NOT be used around mutations: changing the current
-        // item while refresh is deferred throws and leaves a partly updated table.
-        _processes.ReplaceWith(processes);
-        if (selectedPid.HasValue)
-            ProcessGrid.SelectedItem = _processes.FirstOrDefault(p => p.Pid == selectedPid.Value);
-        ProcessCountText.Text = RussianText.Processes(processes.Count) + " · память процессов";
+        string? overviewSelected = (ProcessGrid.SelectedItem as ProcessGroupUsage)?.Name;
+        string? detailSelected = (GroupGrid.SelectedItem as ProcessGroupUsage)?.Name;
+        _groups.ReplaceWith(groups);
+        if (overviewSelected is not null)
+            ProcessGrid.SelectedItem = _groups.FirstOrDefault(g =>
+                g.Name.Equals(overviewSelected, StringComparison.OrdinalIgnoreCase));
+        if (detailSelected is not null)
+            GroupGrid.SelectedItem = _groups.FirstOrDefault(g =>
+                g.Name.Equals(detailSelected, StringComparison.OrdinalIgnoreCase));
+        string summary = $"{groups.Count} приложений · {RussianText.Processes(processCount)}";
+        ProcessCountText.Text = summary;
+        GroupCountText.Text = summary;
+        UpdateTrimButton();
     }
 
-    // Invoked by packaged-executable CI startup check. Uses the same path as live polling.
-    internal void VerifyProcessRefreshForSmokeTest()
+    private bool MatchesGroup(ProcessGroupUsage group, string? query)
     {
-        try
-        {
-            ApplyProcessSnapshot([
-                new ProcessUsage(101, "Alpha", 4000, 2000),
-                new ProcessUsage(102, "Beta", 3000, 1000),
-                new ProcessUsage(103, "Gamma", 2000, 1000)
-            ]);
-            if (ProcessGrid.Items.Count != 3)
-                throw new InvalidOperationException("Таблица не отобразила первый снимок.");
-            SearchBox.Text = "Beta";
-            if (ProcessGrid.Items.Count != 1)
-                throw new InvalidOperationException("Поиск не отфильтровал процессы.");
-            ApplyProcessSnapshot([
-                new ProcessUsage(201, "Beta 2", 5000, 3000),
-                new ProcessUsage(202, "Delta", 1000, 500)
-            ]);
-            if (ProcessGrid.Items.Count != 1 ||
-                (ProcessGrid.Items[0] as ProcessUsage)?.Pid != 201)
-                throw new InvalidOperationException("Обновление таблицы нарушило фильтрацию.");
-            SearchBox.Clear();
-            if (ProcessGrid.Items.Count != 2)
-                throw new InvalidOperationException("После очистки поиска видны не все процессы.");
-            ApplyProcessSnapshot([]);
-            if (ProcessGrid.Items.Count != 0)
-                throw new InvalidOperationException("После пустого снимка остались строки.");
-        }
-        finally
-        {
-            SearchBox.Clear();
-            ApplyProcessSnapshot([]);
-        }
-    }
-
-    private bool FilterProcess(object item)
-    {
-        if (item is not ProcessUsage process) return false;
-        string search = SearchBox?.Text?.Trim() ?? "";
+        string search = query?.Trim() ?? "";
         return search.Length == 0 ||
-               process.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-               process.Pid.ToString().Contains(search, StringComparison.OrdinalIgnoreCase);
+            group.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            group.Members.Any(p => p.Pid.ToString().Contains(search, StringComparison.OrdinalIgnoreCase));
     }
+
+    private bool FilterProcess(object item) =>
+        item is ProcessGroupUsage g && MatchesGroup(g, SearchBox?.Text);
+
+    private bool FilterGroup(object item) =>
+        item is ProcessGroupUsage g && MatchesGroup(g, GroupSearchBox?.Text);
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (SearchPlaceholder is not null)
             SearchPlaceholder.Visibility = string.IsNullOrWhiteSpace(SearchBox.Text)
                 ? Visibility.Visible : Visibility.Collapsed;
-        if (ProcessGrid?.ItemsSource is not null)
-            CollectionViewSource.GetDefaultView(ProcessGrid.ItemsSource).Refresh();
+        _overviewView?.Refresh();
     }
 
-    private void ProcessGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void GroupSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (GroupSearchPlaceholder is not null)
+            GroupSearchPlaceholder.Visibility = string.IsNullOrWhiteSpace(GroupSearchBox.Text)
+                ? Visibility.Visible : Visibility.Collapsed;
+        _detailView?.Refresh();
+    }
+
+    private void ProcessGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateTrimButton();
+
+    private void UpdateTrimButton()
     {
         if (TrimButton is not null)
-            TrimButton.IsEnabled = !_cleaning && ProcessGrid.SelectedItem is ProcessUsage;
+            TrimButton.IsEnabled = !_cleaning &&
+                ProcessGrid.SelectedItem is ProcessGroupUsage { Count: 1 };
+    }
+
+    // Used by the Windows packaged-EXE startup test to exercise real navigation and grouping.
+    internal void VerifyProcessRefreshForSmokeTest()
+    {
+        var first = ProcessGrouping.Build([
+            new ProcessUsage(101, "alpha", 4000, 1000),
+            new ProcessUsage(102, "ALPHA", 2000, 500),
+            new ProcessUsage(103, "beta", 3000, 2000)
+        ]);
+        ApplyProcessSnapshot(first, 3);
+        if (ProcessGrid.Items.Count != 2 || GroupGrid.Items.Count != 2)
+            throw new InvalidOperationException("Группировка не отображается в двух разделах.");
+        SearchBox.Text = "102";
+        if (ProcessGrid.Items.Count != 1)
+            throw new InvalidOperationException("Поиск по PID в обзоре не работает.");
+        GroupSearchBox.Text = "beta";
+        if (GroupGrid.Items.Count != 1)
+            throw new InvalidOperationException("Поиск по приложению не работает.");
+        SearchBox.Clear();
+        GroupSearchBox.Clear();
+        ActivateSection(Section.Processes);
+        if (ProcessesPage.Visibility != Visibility.Visible || OverviewPage.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Раздел процессов не открылся.");
+        ActivateSection(Section.Settings);
+        if (SettingsPage.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Раздел настроек не открылся.");
+        ActivateSection(Section.About);
+        if (AboutPage.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Раздел «О программе» не открылся.");
+        ActivateSection(Section.Overview);
+        ApplyProcessSnapshot([], 0);
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
@@ -335,13 +366,25 @@ public partial class MainWindow : Window
         {
             _cleaning = false;
             CleanButton.IsEnabled = CleanupService.IsElevated;
-            TrimButton.IsEnabled = ProcessGrid.SelectedItem is ProcessUsage;
+            UpdateTrimButton();
         }
     }
 
     private async void Trim_Click(object sender, RoutedEventArgs e)
     {
-        if (_cleaning || ProcessGrid.SelectedItem is not ProcessUsage selected) return;
+        if (_cleaning || ProcessGrid.SelectedItem is not ProcessGroupUsage { Count: 1 } selected) return;
+        await TrimProcessAsync(selected.Members[0]);
+    }
+
+    private async void TrimMember_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ProcessUsage selected })
+            await TrimProcessAsync(selected);
+    }
+
+    private async Task TrimProcessAsync(ProcessUsage selected)
+    {
+        if (_cleaning) return;
         if (MessageBox.Show(this,
                 "Уменьшить рабочий набор процесса " + selected.Name + " (PID " + selected.Pid +
                 ")? Данные могут быть повторно загружены в ОЗУ, а процесс — временно замедлиться.",
@@ -361,31 +404,114 @@ public partial class MainWindow : Window
         {
             _cleaning = false;
             CleanButton.IsEnabled = CleanupService.IsElevated;
-            TrimButton.IsEnabled = ProcessGrid.SelectedItem is ProcessUsage;
+            UpdateTrimButton();
         }
         await RefreshAsync();
     }
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
+    private void Settings_Click(object sender, RoutedEventArgs e) =>
+        ActivateSection(Section.Settings);
+
+    private void LoadSettingsControls()
     {
-        var dialog = new SettingsWindow(_settings) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
+        RefreshText.Text = _settings.RefreshSeconds.ToString();
+        ThresholdText.Text = _settings.AutoCleanThreshold.ToString();
+        CooldownText.Text = _settings.AutoCleanCooldownMinutes.ToString();
+        AutoCleanCheck.IsChecked = _settings.AutoClean;
+        StartupCheck.IsChecked = _settings.StartWithWindows;
+        MinimizeCheck.IsChecked = _settings.MinimizeToTray;
+        CloseCheck.IsChecked = _settings.CloseToTray;
+        UpdateCheck.IsChecked = _settings.CheckForUpdates;
+        SettingsStatusText.Text = "Изменения вступят в силу после сохранения.";
+    }
+
+    private void CancelSettings_Click(object sender, RoutedEventArgs e)
+    {
+        LoadSettingsControls();
+        SetStatus("Несохранённые изменения отменены.");
+    }
+
+    private void SaveSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(RefreshText.Text, out int refresh) || refresh is < 1 or > 10 ||
+            !int.TryParse(ThresholdText.Text, out int threshold) || threshold is < 70 or > 98 ||
+            !int.TryParse(CooldownText.Text, out int cooldown) || cooldown is < 5 or > 120)
+        {
+            SettingsStatusText.Text = "Проверьте значения: обновление 1–10 сек., порог 70–98%, пауза 5–120 мин.";
+            SetStatus("Некорректные настройки.");
+            return;
+        }
+
+        var next = new AppSettings
+        {
+            RefreshSeconds = refresh,
+            AutoCleanThreshold = threshold,
+            AutoCleanCooldownMinutes = cooldown,
+            AutoClean = AutoCleanCheck.IsChecked == true,
+            StartWithWindows = StartupCheck.IsChecked == true,
+            MinimizeToTray = MinimizeCheck.IsChecked == true,
+            CloseToTray = CloseCheck.IsChecked == true,
+            CheckForUpdates = UpdateCheck.IsChecked == true
+        };
         try
         {
-            var next = dialog.Result;
             StartupService.SetEnabled(next.StartWithWindows);
             _store.Save(next);
             _settings = next;
-            UpdateAutomationSummary();
             ConfigureTimer();
             ConfigureUpdateTimer();
-            if (next.CheckForUpdates) _ = CheckUpdatesAsync(false);
+            UpdateAutomationSummary();
+            LoadSettingsControls();
+            SettingsStatusText.Text = "Настройки сохранены.";
             SetStatus("Настройки сохранены.");
+            if (next.CheckForUpdates) _ = CheckUpdatesAsync(false);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Не удалось сохранить настройки",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            StartupLog.Error("Не удалось сохранить настройки", ex);
+            SettingsStatusText.Text = "Ошибка: " + ex.Message;
+            SetStatus("Не удалось сохранить настройки.");
+        }
+    }
+
+    private void ActivateSection(Section section)
+    {
+        _activeSection = section;
+        OverviewPage.Visibility = section == Section.Overview ? Visibility.Visible : Visibility.Collapsed;
+        ProcessesPage.Visibility = section == Section.Processes ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = section == Section.Settings ? Visibility.Visible : Visibility.Collapsed;
+        AboutPage.Visibility = section == Section.About ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var item in new (Button button, Section page)[]
+        {
+            (OverviewNav, Section.Overview), (ProcessesNav, Section.Processes),
+            (SettingsNav, Section.Settings), (AboutNav, Section.About)
+        })
+        {
+            item.button.Background = (System.Windows.Media.Brush)FindResource(
+                item.page == section ? "SelectedNavBrush" : "TransparentNavBrush");
+            item.button.Foreground = (System.Windows.Media.Brush)FindResource(
+                item.page == section ? "AccentBrush" : "TextBrush");
+        }
+        if (section == Section.Settings) LoadSettingsControls();
+    }
+
+    private void OpenGithub_Click(object sender, RoutedEventArgs e) =>
+        OpenExternal("https://github.com/rkfsociety/MemPulse");
+
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        string directory = System.IO.Path.GetDirectoryName(StartupLog.FilePath) ??
+            throw new InvalidOperationException("Папка журнала недоступна.");
+        OpenExternal(directory);
+    }
+
+    private void OpenExternal(string target)
+    {
+        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (Exception ex)
+        {
+            StartupLog.Error("Не удалось открыть адрес или папку", ex);
+            SetStatus("Не удалось открыть: " + ex.Message);
         }
     }
 
@@ -637,25 +763,14 @@ public partial class MainWindow : Window
         HistoryFill.Points = filled;
     }
 
-    private void Overview_Click(object sender, RoutedEventArgs e)
-    {
-        OverviewCard.BringIntoView();
-        SetStatus("Обзор текущего использования памяти.");
-    }
+    private void Overview_Click(object sender, RoutedEventArgs e) =>
+        ActivateSection(Section.Overview);
 
-    private void Processes_Click(object sender, RoutedEventArgs e)
-    {
-        SearchBox.Focus();
-        SetStatus("Введите имя процесса или PID для поиска.");
-    }
+    private void Processes_Click(object sender, RoutedEventArgs e) =>
+        ActivateSection(Section.Processes);
 
     private void About_Click(object sender, RoutedEventArgs e) =>
-        MessageBox.Show(this,
-            "MemPulse v" + UpdateService.CurrentVersion +
-            "\\nМониторинг памяти и управление её очисткой в Windows." +
-            "\\n\\nПотребление ОЗУ измеряется средствами Windows. " +
-            "Очистка кэша не гарантирует ускорения системы.",
-            "О программе MemPulse", MessageBoxButton.OK, MessageBoxImage.Information);
+        ActivateSection(Section.About);
 
     private void SetStatus(string text) => StatusText.Text = text;
 }

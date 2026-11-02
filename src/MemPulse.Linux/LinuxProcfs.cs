@@ -20,7 +20,6 @@ public sealed class LinuxProcfs
             if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None,
                 CultureInfo.InvariantCulture, out int pid) || pid <= 0)
                 continue;
-
             try
             {
                 var status = File.ReadAllText(Path.Combine(directory, "status"));
@@ -32,6 +31,28 @@ public sealed class LinuxProcfs
             }
         }
         return result.OrderByDescending(p => p.WorkingBytes).ThenBy(p => p.Name).ToArray();
+    }
+
+    public static bool TryReadStartTicks(int pid, out ulong ticks)
+    {
+        ticks = 0;
+        if (pid <= 0) return false;
+        try { return TryParseStartTicks(File.ReadAllText($"/proc/{pid}/stat"), out ticks); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    // /proc/PID/stat field 2 (comm) may contain spaces and parentheses.
+    // Field 22 (starttime) is the twentieth token after the final ')' delimiter.
+    public static bool TryParseStartTicks(string stat, out ulong ticks)
+    {
+        ticks = 0;
+        int delimiter = stat.LastIndexOf(')');
+        if (delimiter < 0 || delimiter + 1 >= stat.Length) return false;
+        string[] tail = stat[(delimiter + 1)..].Split(' ',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tail.Length >= 20 &&
+            ulong.TryParse(tail[19], NumberStyles.None, CultureInfo.InvariantCulture, out ticks) &&
+            ticks != 0;
     }
 
     public static MemoryUsage ParseMemInfo(string text)

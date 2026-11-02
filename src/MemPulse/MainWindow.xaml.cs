@@ -69,7 +69,7 @@ public partial class MainWindow : Window
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape &&
-                     Keyboard.FocusedElement is TextBox search &&
+                     Keyboard.FocusedElement is System.Windows.Controls.TextBox search &&
                      (ReferenceEquals(search, SearchBox) || ReferenceEquals(search, GroupSearchBox)) &&
                      !string.IsNullOrEmpty(search.Text))
             {

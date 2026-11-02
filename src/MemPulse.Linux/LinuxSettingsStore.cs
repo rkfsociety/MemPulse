@@ -40,7 +40,8 @@ public sealed class LinuxSettingsStore
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()),
                 new JsonSerializerOptions { WriteIndented = true }));
-            File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            if (OperatingSystem.IsLinux())
+                File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             File.Move(temporary, path, true);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 
 namespace MemPulse.Linux;
@@ -35,7 +36,11 @@ internal sealed class LinuxApp : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
             desktop.MainWindow = new MainWindow();
+            if (Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
+                Dispatcher.UIThread.Post(() => desktop.Shutdown(0), DispatcherPriority.Background);
+        }
         base.OnFrameworkInitializationCompleted();
     }
 }

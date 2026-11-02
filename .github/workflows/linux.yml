@@ -18,6 +18,8 @@ jobs:
         run: dotnet build src/MemPulse.Linux/MemPulse.Linux.csproj -c Release --warnaserror
       - name: Run Linux procfs smoke tests
         run: dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Release
+      - name: Smoke test Linux graphical startup under Xvfb
+        run: xvfb-run -a dotnet run --project src/MemPulse.Linux/MemPulse.Linux.csproj -c Release -- --startup-smoke-test
       - name: Publish portable Linux builds
         shell: bash
         run: |
@@ -33,3 +35,15 @@ jobs:
         with:
           name: MemPulse-Linux
           path: dist/MemPulse-linux-*.tar.gz
+
+  cleanup-accidental-branch:
+    # One-time removal of a branch created before the user explicitly required main-only work.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'rkfsociety/MemPulse'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Delete unused feature/linux-support branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/feature/linux-support"

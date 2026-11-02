@@ -9,6 +9,7 @@
     <Compile Include="../../src/MemPulse/Core/Models.cs" Link="Models.cs" />
     <Compile Include="../../src/MemPulse/Core/ProcessGrouping.cs" Link="ProcessGrouping.cs" />
     <Compile Include="../../src/MemPulse.Linux/LinuxProcfs.cs" Link="LinuxProcfs.cs" />
+    <Compile Include="../../src/MemPulse.Linux/LinuxSettingsStore.cs" Link="LinuxSettingsStore.cs" />
     <Compile Include="../../src/MemPulse.Linux/LinuxCleanupService.cs" Link="LinuxCleanupService.cs" />
   </ItemGroup>
 </Project>

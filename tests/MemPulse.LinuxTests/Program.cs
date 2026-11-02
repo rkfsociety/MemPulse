@@ -113,6 +113,31 @@ try
 }
 catch (ArgumentOutOfRangeException) { Console.WriteLine("PASS: invalid page size rejected"); }
 
+// Multiple LinuxSettingsStore instances must not race while replacing settings.
+string settingsDirectory = Path.Combine(Path.GetTempPath(), "MemPulse-linux-settings-" + Guid.NewGuid().ToString("N"));
+try
+{
+    string settingsPath = Path.Combine(settingsDirectory, "linux-settings.json");
+    var store = new LinuxSettingsStore(settingsPath);
+    await Task.WhenAll(Enumerable.Range(0, 24).Select(i => Task.Run(() =>
+        new LinuxSettingsStore(settingsPath).Save(new AppSettings { RefreshSeconds = i % 10 + 1 }))));
+    Assert(store.Load().RefreshSeconds is >= 1 and <= 10,
+        "parallel Linux settings saves leave a valid JSON snapshot");
+    Assert(!Directory.EnumerateFiles(settingsDirectory, "*.tmp").Any(),
+        "Linux settings staging files are removed after saving");
+    if (OperatingSystem.IsLinux())
+    {
+        var mode = File.GetUnixFileMode(settingsPath);
+        Assert((mode & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) == 0,
+            "Linux settings file remains private to the current user");
+    }
+}
+finally
+{
+    if (Directory.Exists(settingsDirectory)) Directory.Delete(settingsDirectory, true);
+}
+
 if (OperatingSystem.IsLinux())
 {
     var live = new LinuxProcfs();

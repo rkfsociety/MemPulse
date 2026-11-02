@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _overviewSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private readonly DispatcherTimer _detailSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private int _lastProcessCount;
+    private int _processSnapshotRevision;
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
@@ -266,8 +267,21 @@ public partial class MainWindow : Window
         finally { _refreshing = false; }
     }
 
+    // The DataGrid template owns the scrolling viewport. Restoring its offset after
+    // the collection Reset prevents the dashboard from jumping to the first row
+    // on every monitoring tick, while keeping row/column virtualization enabled.
+    private static ScrollViewer? GridScrollViewer(DataGrid grid)
+    {
+        grid.ApplyTemplate();
+        return grid.Template.FindName("DG_ScrollViewer", grid) as ScrollViewer;
+    }
+
     private void ApplyProcessSnapshot(IReadOnlyList<ProcessGroupUsage> groups, int processCount)
     {
+        var overviewScroll = GridScrollViewer(ProcessGrid);
+        var detailScroll = GridScrollViewer(GroupGrid);
+        double overviewOffset = overviewScroll?.VerticalOffset ?? 0;
+        double detailOffset = detailScroll?.VerticalOffset ?? 0;
         string? overviewSelected = (ProcessGrid.SelectedItem as ProcessGroupUsage)?.Name;
         string? detailSelected = (GroupGrid.SelectedItem as ProcessGroupUsage)?.Name;
         _groups.ReplaceWith(groups);
@@ -280,6 +294,16 @@ public partial class MainWindow : Window
         _lastProcessCount = processCount;
         UpdateSearchSummaries();
         UpdateTrimButton();
+
+        int revision = ++_processSnapshotRevision;
+        if (overviewScroll is not null || detailScroll is not null)
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // Ignore stale restoration if a newer snapshot has arrived.
+                if (revision != _processSnapshotRevision || _forceExit) return;
+                overviewScroll?.ScrollToVerticalOffset(overviewOffset);
+                detailScroll?.ScrollToVerticalOffset(detailOffset);
+            }), DispatcherPriority.Loaded);
     }
 
     private bool MatchesGroup(ProcessGroupUsage group, string? query)
@@ -377,6 +401,17 @@ public partial class MainWindow : Window
         ApplyProcessSnapshot(first, 3);
         if (ProcessGrid.Items.Count != 2 || GroupGrid.Items.Count != 2)
             throw new InvalidOperationException("Группировка не отображается в двух разделах.");
+        ProcessGrid.SelectedItem = first.Single(g => g.Name == "beta");
+        GroupGrid.SelectedItem = first.Single(g => g.Name == "beta");
+        var updated = ProcessGrouping.Build([
+            new ProcessUsage(101, "alpha", 6000, 2000),
+            new ProcessUsage(102, "ALPHA", 3000, 900),
+            new ProcessUsage(103, "beta", 1000, 700)
+        ]);
+        ApplyProcessSnapshot(updated, 3);
+        if ((ProcessGrid.SelectedItem as ProcessGroupUsage)?.Name != "beta" ||
+            (GroupGrid.SelectedItem as ProcessGroupUsage)?.Name != "beta")
+            throw new InvalidOperationException("Выделение процесса потеряно при обновлении списка.");
         SearchBox.Text = "102";
         ApplyOverviewSearch();
         if (ClearOverviewSearchButton.Visibility != Visibility.Visible ||

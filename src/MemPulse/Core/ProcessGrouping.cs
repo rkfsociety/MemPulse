@@ -35,6 +35,19 @@ public static class ProcessGrouping
         return sum;
     }
 
+    /// <summary>Search grouped processes by application name or decimal PID.</summary>
+    public static IReadOnlyList<ProcessGroupUsage> Filter(
+        IReadOnlyList<ProcessGroupUsage> groups, string? query)
+    {
+        query = query?.Trim();
+        if (string.IsNullOrEmpty(query)) return groups;
+        return groups.Where(group =>
+            group.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            group.Members.Any(member =>
+                member.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    .Contains(query, StringComparison.Ordinal))).ToArray();
+    }
+
     public static IReadOnlyList<ProcessGroupUsage> Build(IEnumerable<ProcessUsage> processes)
     {
         var grouped = processes

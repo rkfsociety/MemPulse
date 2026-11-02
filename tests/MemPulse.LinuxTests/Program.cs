@@ -33,6 +33,10 @@ Assert(p.Pid == 123 && p.Name == "my process" &&
        p.WorkingBytes == 1234L * 1024 && p.PrivateBytes == 4567L * 1024, "process status fields");
 var groups = ProcessGrouping.Build([p, p with { Pid = 234 }]);
 Assert(groups.Count == 1 && groups[0].Count == 2, "group Linux processes");
+Assert(ReferenceEquals(ProcessGrouping.Filter(groups, ""), groups), "empty process search preserves original groups");
+Assert(ProcessGrouping.Filter(groups, " MY PROCESS ").Count == 1, "process search ignores case and outer whitespace");
+Assert(ProcessGrouping.Filter(groups, "234").Count == 1, "process search finds a member PID");
+Assert(ProcessGrouping.Filter(groups, "999").Count == 0, "process search rejects unknown PIDs");
 
 string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 18)) + " 123456 0 0";
 Assert(LinuxProcfs.TryParseStartTicks(stat, out var ticks) && ticks == 123456, "stat parsing with spaces and brackets");

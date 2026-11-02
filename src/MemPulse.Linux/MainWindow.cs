@@ -9,9 +9,15 @@ namespace MemPulse.Linux;
 
 public sealed class MainWindow : Window
 {
-    private static readonly IBrush Surface = new SolidColorBrush(Color.Parse("#1C2530"));
-    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#AAB8C4"));
-    private static readonly IBrush Highlight = new SolidColorBrush(Color.Parse("#73DDC2"));
+    // Keep the Linux palette aligned with the Windows dashboard.
+    private static readonly IBrush Canvas = new SolidColorBrush(Color.Parse("#0A121C"));
+    private static readonly IBrush Surface = new SolidColorBrush(Color.Parse("#101F2B"));
+    private static readonly IBrush Raised = new SolidColorBrush(Color.Parse("#172B37"));
+    private static readonly IBrush Stroke = new SolidColorBrush(Color.Parse("#294653"));
+    private static readonly IBrush Text = new SolidColorBrush(Color.Parse("#EEF7FA"));
+    private static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#A3B9C6"));
+    private static readonly IBrush Highlight = new SolidColorBrush(Color.Parse("#35E0C2"));
+    private static readonly IBrush Track = new SolidColorBrush(Color.Parse("#274451"));
     private readonly LinuxProcfs _procfs = new();
     private readonly LinuxSettingsStore _settingsStore = new();
     private readonly AppSettings _settings;
@@ -21,11 +27,14 @@ public sealed class MainWindow : Window
     private readonly TextBlock _available = Metric();
     private readonly TextBlock _cache = Metric();
     private readonly TextBlock _total = Metric();
-    private readonly TextBlock _processCount = new() { Foreground = Muted, FontSize = 14 };
+    private readonly TextBlock _usagePercent = new() { Foreground = Highlight, FontSize = 25, FontWeight = FontWeight.Bold };
+    private readonly TextBlock _processCount = new() { Foreground = Muted, FontSize = 12 };
     private readonly TextBlock _status = new() { Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap };
-    private readonly ProgressBar _usageBar = new() { Minimum = 0, Maximum = 100, Height = 14 };
-    private readonly TextBox _filter = new() { Watermark = "Поиск процесса", Width = 230 };
-    private readonly StackPanel _rows = new() { Spacing = 3 };
+    private readonly ProgressBar _usageBar = new() { Minimum = 0, Maximum = 100, Height = 8, Foreground = Highlight, Background = Track };
+    private readonly TextBox _filter = new() { Watermark = "Поиск имени или PID", Width = 240 };
+    private readonly StackPanel _rows = new() { Spacing = 4 };
+    private readonly ScrollViewer _processScroll = new();
+    private int _processTotal;
     private readonly Button _cleanButton = new() { Content = "Очистить файловый кэш (root)" };
     private readonly Button _applyButton = new() { Content = "Применить автоочистку" };
     private readonly CheckBox _autoBox = new() { Content = "Автоочистка" };
@@ -48,17 +57,24 @@ public sealed class MainWindow : Window
         _autoBox.IsChecked = _settings.AutoClean;
         _threshold.Value = _settings.AutoCleanThreshold;
         _cooldown.Value = _settings.AutoCleanCooldownMinutes;
+        StyleAction(_cleanButton);
+        StyleAction(_applyButton, primary: true);
+        _filter.Background = Raised;
+        _filter.Foreground = Text;
+        _filter.BorderBrush = Stroke;
+        _filter.BorderThickness = new Thickness(1);
+        _filter.Padding = new Thickness(11, 8);
 
         Title = "MemPulse — Linux";
         Width = 1020;
         Height = 790;
         MinWidth = 760;
         MinHeight = 600;
-        Background = new SolidColorBrush(Color.Parse("#121B25"));
+        Background = Canvas;
 
-        var layout = new DockPanel { Margin = new Thickness(24) };
+        var layout = new DockPanel { Margin = new Thickness(20) };
         Content = layout;
-        var header = new StackPanel { Spacing = 12 };
+        var header = new StackPanel { Spacing = 11 };
         DockPanel.SetDock(header, Dock.Top);
         layout.Children.Add(header);
 
@@ -68,11 +84,12 @@ public sealed class MainWindow : Window
             Spacing = 3,
             Children =
             {
-                new TextBlock { Text = "MemPulse", FontSize = 30, FontWeight = FontWeight.Bold, Foreground = Highlight },
-                new TextBlock { Text = "Linux · мониторинг и управление оперативной памятью", Foreground = Muted }
+                new TextBlock { Text = "MemPulse", FontSize = 29, FontWeight = FontWeight.Bold, Foreground = Text },
+                new TextBlock { Text = "МОНИТОРИНГ ПАМЯТИ  /  LINUX", FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Muted }
             }
         });
-        var refresh = new Button { Content = "Обновить", VerticalAlignment = VerticalAlignment.Center };
+        var refresh = new Button { Content = "↻  Обновить", VerticalAlignment = VerticalAlignment.Center };
+        StyleAction(refresh);
         refresh.Click += (_, _) => Refresh();
         Grid.SetColumn(refresh, 1);
         titleLine.Children.Add(refresh);
@@ -80,34 +97,59 @@ public sealed class MainWindow : Window
 
         var metrics = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 8)
+            ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 4, 0, 0)
         };
         AddMetric(metrics, 0, "Занято", _used);
         AddMetric(metrics, 1, "Доступно", _available);
         AddMetric(metrics, 2, "Кэш (reclaimable)", _cache);
         AddMetric(metrics, 3, "Всего", _total);
-        var overview = new StackPanel { Spacing = 12 };
-        overview.Children.Add(new TextBlock
+        var overview = new StackPanel { Spacing = 13 };
+        var memoryHeading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        memoryHeading.Children.Add(new StackPanel
         {
-            Text = "Оперативная память", FontWeight = FontWeight.SemiBold, FontSize = 19
+            Spacing = 3,
+            Children =
+            {
+                new TextBlock { Text = "Оперативная память", Foreground = Text, FontWeight = FontWeight.SemiBold, FontSize = 17 },
+                new TextBlock { Text = "Физическая память · текущая загрузка", Foreground = Muted, FontSize = 12 }
+            }
         });
+        Grid.SetColumn(_usagePercent, 1);
+        memoryHeading.Children.Add(_usagePercent);
+        overview.Children.Add(memoryHeading);
         overview.Children.Add(_usageBar);
         overview.Children.Add(metrics);
         header.Children.Add(new Border
         {
-            Background = Surface, CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(18), Child = overview
+            Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14), Padding = new Thickness(17), Child = overview
         });
 
-        var operations = new StackPanel { Spacing = 7 };
-        _cleanButton.Click += async (_, _) => await CleanAsync();
-        operations.Children.Add(_cleanButton);
-        operations.Children.Add(new TextBlock
+        var operations = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        operations.Children.Add(new StackPanel
         {
-            Text = "Ручной сброс файлового кэша. Потребуется polkit (pkexec) и подтверждение прав root.",
-            Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap
+            Spacing = 5,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock { Text = "Очистка файлового кэша", Foreground = Text, FontSize = 15, FontWeight = FontWeight.SemiBold },
+                new TextBlock
+                {
+                    Text = "Требуется подтверждение прав через polkit.",
+                    Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap
+                }
+            }
         });
-        header.Children.Add(operations);
+        _cleanButton.Click += async (_, _) => await CleanAsync();
+        _cleanButton.VerticalAlignment = VerticalAlignment.Center;
+        _cleanButton.Margin = new Thickness(12, 0, 0, 0);
+        Grid.SetColumn(_cleanButton, 1);
+        operations.Children.Add(_cleanButton);
+        header.Children.Add(new Border
+        {
+            Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(15), Child = operations
+        });
 
         var automatic = new StackPanel { Spacing = 8 };
         automatic.Children.Add(new TextBlock
@@ -131,8 +173,8 @@ public sealed class MainWindow : Window
         });
         header.Children.Add(new Border
         {
-            Background = Surface, CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(14), Child = automatic
+            Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(15), Child = automatic
         });
 
         var processHeading = new Grid
@@ -150,22 +192,24 @@ public sealed class MainWindow : Window
         });
         Grid.SetColumn(_filter, 1);
         processHeading.Children.Add(_filter);
-        _filter.TextChanged += (_, _) => RenderProcesses();
+        _filter.TextChanged += (_, _) => RenderProcesses(resetScroll: true);
         header.Children.Add(processHeading);
 
         var footer = new StackPanel { Spacing = 5, Margin = new Thickness(0, 12, 0, 0) };
         DockPanel.SetDock(footer, Dock.Bottom);
         footer.Children.Add(new TextBlock
         {
-            Text = "RSS — физическая память; Data — приватный виртуальный сегмент (не PSS). MADV_PAGEOUT запрашивает вытеснение до 128 МиБ подходящих страниц выбранного PID, но не гарантирует уменьшение RSS.",
+            Text = "RSS — физическая память · Data — виртуальная память · Очистка PID не гарантирует уменьшение RSS",
             Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap
         });
         footer.Children.Add(_status);
         layout.Children.Add(footer);
+        _processScroll.Content = _rows;
         layout.Children.Add(new Border
         {
-            Background = Surface, CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(10), Child = new ScrollViewer { Content = _rows }
+            Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(9), Child = _processScroll
         });
 
         _timer.Tick += (_, _) => Refresh();
@@ -183,15 +227,32 @@ public sealed class MainWindow : Window
     }
 
     private static TextBlock Metric() =>
-        new() { FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = Highlight };
+        new() { FontSize = 18, FontWeight = FontWeight.SemiBold, Foreground = Text };
+
+    private static void StyleAction(Button button, bool primary = false)
+    {
+        button.Background = primary ? Highlight : Raised;
+        button.Foreground = primary ? Canvas : Text;
+        button.BorderBrush = primary ? Highlight : Stroke;
+        button.BorderThickness = new Thickness(1);
+        button.Padding = new Thickness(13, 8);
+        button.MinHeight = 36;
+        button.FontWeight = FontWeight.SemiBold;
+    }
 
     private static void AddMetric(Grid grid, int column, string caption, TextBlock value)
     {
         var stack = new StackPanel { Spacing = 5 };
-        stack.Children.Add(new TextBlock { Text = caption, Foreground = Muted, FontSize = 12 });
+        stack.Children.Add(new TextBlock { Text = caption, Foreground = Muted, FontSize = 11 });
         stack.Children.Add(value);
-        Grid.SetColumn(stack, column);
-        grid.Children.Add(stack);
+        var card = new Border
+        {
+            Background = Raised, BorderBrush = Stroke, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, column == 3 ? 0 : 9, 0), Child = stack
+        };
+        Grid.SetColumn(card, column);
+        grid.Children.Add(card);
     }
 
     private void Refresh()
@@ -200,14 +261,15 @@ public sealed class MainWindow : Window
         {
             var memory = _procfs.ReadMemory();
             _usageBar.Value = memory.UsedPercent;
-            _used.Text = Format.Bytes(memory.Used) + $" ({memory.UsedPercent:0.0}%)";
+            _usagePercent.Text = $"{memory.UsedPercent:0.0}%";
+            _used.Text = Format.Bytes(memory.Used);
             _available.Text = Format.Bytes(memory.Available);
             _cache.Text = Format.Bytes(memory.Cache);
             _total.Text = Format.Bytes(memory.Total);
 
             var processes = _procfs.ReadProcesses();
             _groups = ProcessGrouping.Build(processes);
-            _processCount.Text = $"{processes.Count} процессов · {_groups.Count} приложений · RSS / Data · раскройте группу для выбора PID";
+            _processTotal = processes.Count;
             RenderProcesses();
             if (_autoSession is { Running: false })
             {
@@ -226,10 +288,18 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void RenderProcesses()
+    private void RenderProcesses(bool resetScroll = false)
     {
         string query = _filter.Text?.Trim() ?? "";
-        // Preserve expanded PID groups across the two-second refresh cycle.
+        var matches = ProcessGrouping.Filter(_groups, query);
+        _processCount.Text = query.Length == 0
+            ? $"{_groups.Count} приложений · {_processTotal} процессов"
+            : $"Найдено {matches.Count} из {_groups.Count} приложений";
+        if (matches.Count > 100)
+            _processCount.Text += " · показаны первые 100";
+
+        // Refreshing live process numbers must not throw the reader back to the top.
+        var previousOffset = resetScroll ? new Vector(0, 0) : _processScroll.Offset;
         foreach (var old in _rows.Children.OfType<Expander>())
         {
             if (old.Tag is not string name) continue;
@@ -237,60 +307,87 @@ public sealed class MainWindow : Window
             else _expandedGroups.Remove(name);
         }
         _rows.Children.Clear();
-        foreach (var group in _groups.Where(g => g.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-                     .Take(100))
+        foreach (var group in matches.Take(100))
         {
-            var details = new StackPanel { Spacing = 3 };
-            foreach (var member in group.Members)
-            {
-                var row = new Grid
-                {
-                    ColumnDefinitions = new ColumnDefinitions("*,120,120,145"),
-                    Margin = new Thickness(8, 4)
-                };
-                row.Children.Add(new TextBlock
-                {
-                    Text = "PID " + member.Pid + " · " + member.Name,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                var rss = new TextBlock
-                {
-                    Text = member.WorkingText, Foreground = Highlight,
-                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(rss, 1);
-                row.Children.Add(rss);
-                var data = new TextBlock
-                {
-                    Text = member.PrivateText, Foreground = Muted,
-                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(data, 2);
-                row.Children.Add(data);
-                var trim = new Button { Content = "Очистить PID", Margin = new Thickness(8, 0, 0, 0) };
-                int pid = member.Pid;
-                trim.Click += async (_, _) => await TrimAsync(pid, trim);
-                Grid.SetColumn(trim, 3);
-                row.Children.Add(trim);
-                details.Children.Add(row);
-            }
+            bool expanded = _expandedGroups.Contains(group.Name);
             var expander = new Expander
             {
                 Tag = group.Name,
-                IsExpanded = _expandedGroups.Contains(group.Name),
+                IsExpanded = expanded,
                 Header = new TextBlock
                 {
                     Text = group.DisplayName + "  ·  RSS " + group.WorkingText +
                         "  ·  Data " + group.PrivateText,
+                    Foreground = Text,
                     TextTrimming = TextTrimming.CharacterEllipsis
-                },
-                Content = details
+                }
+            };
+            // Build PID rows only for open groups. Large process lists no longer
+            // allocate hundreds of invisible buttons every two seconds.
+            if (expanded)
+                expander.Content = CreateProcessDetails(group);
+            expander.Expanded += (_, _) =>
+            {
+                _expandedGroups.Add(group.Name);
+                if (expander.Content is null)
+                    expander.Content = CreateProcessDetails(group);
+            };
+            expander.Collapsed += (_, _) =>
+            {
+                _expandedGroups.Remove(group.Name);
+                expander.Content = null;
             };
             _rows.Children.Add(expander);
         }
         if (_rows.Children.Count == 0)
-            _rows.Children.Add(new TextBlock { Text = "Процессы не найдены.", Foreground = Muted });
+            _rows.Children.Add(new TextBlock
+            {
+                Text = "Процессы не найдены.", Foreground = Muted,
+                Margin = new Thickness(12)
+            });
+        Dispatcher.UIThread.Post(() => _processScroll.Offset = previousOffset, DispatcherPriority.Loaded);
+    }
+
+    private StackPanel CreateProcessDetails(ProcessGroupUsage group)
+    {
+        var details = new StackPanel { Spacing = 3, Margin = new Thickness(0, 4, 0, 8) };
+        foreach (var member in group.Members)
+        {
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,120,120,145"),
+                Margin = new Thickness(8, 4)
+            };
+            row.Children.Add(new TextBlock
+            {
+                Text = "PID " + member.Pid + " · " + member.Name,
+                Foreground = Text,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var rss = new TextBlock
+            {
+                Text = member.WorkingText, Foreground = Highlight,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(rss, 1);
+            row.Children.Add(rss);
+            var data = new TextBlock
+            {
+                Text = member.PrivateText, Foreground = Muted,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(data, 2);
+            row.Children.Add(data);
+            var trim = new Button { Content = "Очистить PID", Margin = new Thickness(8, 0, 0, 0) };
+            StyleAction(trim);
+            int pid = member.Pid;
+            trim.Click += async (_, _) => await TrimAsync(pid, trim);
+            Grid.SetColumn(trim, 3);
+            row.Children.Add(trim);
+            details.Children.Add(row);
+        }
+        return details;
     }
 
     private async Task TrimAsync(int pid, Button button)

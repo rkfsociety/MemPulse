@@ -18,6 +18,12 @@ Assert(config.RefreshSeconds == 1 && config.AutoCleanThreshold == 98 &&
 var clone = config.Copy();
 clone.AutoClean = true;
 Assert(!config.AutoClean, "settings copy isolation");
+Assert(RussianText.Applications(1) == "1 приложение" &&
+    RussianText.Applications(2) == "2 приложения" &&
+    RussianText.Applications(5) == "5 приложений" &&
+    RussianText.Applications(11) == "11 приложений" &&
+    RussianText.Applications(21) == "21 приложение" &&
+    RussianText.Applications(112) == "112 приложений", "Russian application count declension");
 Assert(RussianText.Processes(1) == "1 процесс" &&
        RussianText.Processes(2) == "2 процесса" &&
        RussianText.Processes(5) == "5 процессов" &&

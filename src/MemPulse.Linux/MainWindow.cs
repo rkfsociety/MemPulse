@@ -450,8 +450,8 @@ public sealed class MainWindow : Window
         var matches = ProcessGrouping.Sort(ProcessGrouping.Filter(_groups, query),
             (ProcessSortOrder)Math.Clamp(_sort.SelectedIndex, 0, 3));
         _processCount.Text = query.Length == 0
-            ? $"{_groups.Count} приложений · {_processTotal} процессов"
-            : $"Найдено {matches.Count} из {_groups.Count} приложений";
+            ? $"{RussianText.Applications(_groups.Count)} · {RussianText.Processes(_processTotal)}"
+            : $"Найдено {matches.Count} из {RussianText.Applications(_groups.Count)}";
         int visible = Math.Min(matches.Count, _visibleGroupLimit);
         if (matches.Count > visible)
             _processCount.Text += $" · показано {visible}";
@@ -510,7 +510,7 @@ public sealed class MainWindow : Window
             int nextCount = Math.Min(ProcessPageSize, matches.Count - visible);
             var more = new Button
             {
-                Content = $"Показать ещё {nextCount} приложений",
+                Content = $"Показать ещё {RussianText.Applications(nextCount)}",
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(12)
             };

@@ -320,15 +320,22 @@
                                 Click="Refresh_Click" Padding="11,8" VerticalAlignment="Center"/>
                     </Grid>
                     <Grid Grid.Row="1" Margin="4,0,4,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBox x:Name="SearchBox" Height="34" VerticalContentAlignment="Center"
                                  TextChanged="SearchBox_TextChanged" ToolTip="Поиск по имени процесса или PID"/>
                         <TextBlock x:Name="SearchPlaceholder" IsHitTestVisible="False"
                                    Text="⌕   Поиск приложения или PID" VerticalAlignment="Center"
                                    Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0"/>
+                        <Button x:Name="ClearOverviewSearchButton" Grid.Column="1" Content="Сбросить" Visibility="Collapsed"
+                                Margin="9,0,0,0" Padding="12,6" Style="{StaticResource ActionButton}"
+                                Click="ClearOverviewSearch_Click" ToolTip="Очистить поиск приложений"/>
                     </Grid>
                     <DataGrid x:Name="ProcessGrid" Background="{StaticResource PanelBrush}" Grid.Row="2" AutoGenerateColumns="False"
                               SelectionChanged="ProcessGrid_SelectionChanged" RowHeaderWidth="0"
                               AlternationCount="2" ScrollViewer.CanContentScroll="True"
+                              EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.IsDeferredScrollingEnabled="True"
                               RowStyle="{StaticResource ProcessRowStyle}" RowHeight="49"
                               ColumnHeaderHeight="39">
                         <DataGrid.Columns>
@@ -473,13 +480,20 @@
      <TextBlock x:Name="GroupCountText" Text="Загрузка…" Style="{StaticResource MutedText}" Margin="0,5,0,0"/></StackPanel>
    </DockPanel>
    <Grid Grid.Row="1" Margin="0,17,0,15">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <TextBox x:Name="GroupSearchBox" Height="38" VerticalContentAlignment="Center" TextChanged="GroupSearch_TextChanged"/>
     <TextBlock x:Name="GroupSearchPlaceholder" Text="⌕   Поиск по имени или PID" IsHitTestVisible="False" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="12,0"/>
+    <Button x:Name="ClearGroupSearchButton" Grid.Column="1" Content="Сбросить" Visibility="Collapsed"
+            Margin="9,0,0,0" Padding="12,6" Style="{StaticResource ActionButton}"
+            Click="ClearGroupSearch_Click" ToolTip="Очистить поиск процессов"/>
    </Grid>
    <DataGrid x:Name="GroupGrid" Grid.Row="2" AutoGenerateColumns="False" RowHeaderWidth="0" RowHeight="49"
              Background="{StaticResource PanelBrush}" Foreground="{StaticResource TextBrush}"
              RowStyle="{StaticResource ProcessRowStyle}" RowDetailsVisibilityMode="VisibleWhenSelected"
-             ColumnHeaderHeight="38" ScrollViewer.CanContentScroll="True">
+             ColumnHeaderHeight="38" ScrollViewer.CanContentScroll="True"
+             EnableRowVirtualization="True" EnableColumnVirtualization="True"
+             VirtualizingPanel.VirtualizationMode="Recycling"
+             ScrollViewer.IsDeferredScrollingEnabled="True">
     <DataGrid.RowDetailsTemplate>
      <DataTemplate>
       <Border Background="#142936" Padding="14,13" Margin="0,0,0,6" BorderBrush="#31505B" BorderThickness="0,1,0,1">

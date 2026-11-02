@@ -32,6 +32,9 @@ public partial class MainWindow : Window
     private enum Section { Overview, Processes, Settings, About }
     private Section _activeSection;
     private readonly DispatcherTimer _timer = new();
+    private readonly DispatcherTimer _overviewSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private readonly DispatcherTimer _detailSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private int _lastProcessCount;
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
@@ -58,6 +61,8 @@ public partial class MainWindow : Window
         ActivateSection(Section.Overview);
         _timer.Tick += async (_, _) => await RefreshAsync();
         _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
+        _overviewSearchTimer.Tick += (_, _) => { _overviewSearchTimer.Stop(); ApplyOverviewSearch(); };
+        _detailSearchTimer.Tick += (_, _) => { _detailSearchTimer.Stop(); ApplyDetailSearch(); };
         PreviewKeyDown += (_, e) =>
         {
             if (_confirmation is not null) return;
@@ -272,9 +277,8 @@ public partial class MainWindow : Window
         if (detailSelected is not null)
             GroupGrid.SelectedItem = _groups.FirstOrDefault(g =>
                 g.Name.Equals(detailSelected, StringComparison.OrdinalIgnoreCase));
-        string summary = $"{groups.Count} приложений · {RussianText.Processes(processCount)}";
-        ProcessCountText.Text = summary;
-        GroupCountText.Text = summary;
+        _lastProcessCount = processCount;
+        UpdateSearchSummaries();
         UpdateTrimButton();
     }
 
@@ -297,7 +301,12 @@ public partial class MainWindow : Window
         if (SearchPlaceholder is not null)
             SearchPlaceholder.Visibility = string.IsNullOrWhiteSpace(SearchBox.Text)
                 ? Visibility.Visible : Visibility.Collapsed;
-        _overviewView?.Refresh();
+        if (ClearOverviewSearchButton is not null)
+            ClearOverviewSearchButton.Visibility = string.IsNullOrWhiteSpace(SearchBox.Text)
+                ? Visibility.Collapsed : Visibility.Visible;
+        _overviewSearchTimer.Stop();
+        if (string.IsNullOrWhiteSpace(SearchBox.Text)) ApplyOverviewSearch();
+        else _overviewSearchTimer.Start();
     }
 
     private void GroupSearch_TextChanged(object sender, TextChangedEventArgs e)
@@ -305,7 +314,46 @@ public partial class MainWindow : Window
         if (GroupSearchPlaceholder is not null)
             GroupSearchPlaceholder.Visibility = string.IsNullOrWhiteSpace(GroupSearchBox.Text)
                 ? Visibility.Visible : Visibility.Collapsed;
+        if (ClearGroupSearchButton is not null)
+            ClearGroupSearchButton.Visibility = string.IsNullOrWhiteSpace(GroupSearchBox.Text)
+                ? Visibility.Collapsed : Visibility.Visible;
+        _detailSearchTimer.Stop();
+        if (string.IsNullOrWhiteSpace(GroupSearchBox.Text)) ApplyDetailSearch();
+        else _detailSearchTimer.Start();
+    }
+
+    private void ApplyOverviewSearch()
+    {
+        _overviewView?.Refresh();
+        UpdateSearchSummaries();
+    }
+
+    private void ApplyDetailSearch()
+    {
         _detailView?.Refresh();
+        UpdateSearchSummaries();
+    }
+
+    private void UpdateSearchSummaries()
+    {
+        if (_overviewView is null || _detailView is null) return;
+        string total = $"{RussianText.Applications(_groups.Count)} · {RussianText.Processes(_lastProcessCount)}";
+        ProcessCountText.Text = string.IsNullOrWhiteSpace(SearchBox.Text)
+            ? total : $"Найдено {_overviewView.Count} из {RussianText.Applications(_groups.Count)}";
+        GroupCountText.Text = string.IsNullOrWhiteSpace(GroupSearchBox.Text)
+            ? total : $"Найдено {_detailView.Count} из {RussianText.Applications(_groups.Count)}";
+    }
+
+    private void ClearOverviewSearch_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Clear();
+        SearchBox.Focus();
+    }
+
+    private void ClearGroupSearch_Click(object sender, RoutedEventArgs e)
+    {
+        GroupSearchBox.Clear();
+        GroupSearchBox.Focus();
     }
 
     private void ProcessGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -330,13 +378,29 @@ public partial class MainWindow : Window
         if (ProcessGrid.Items.Count != 2 || GroupGrid.Items.Count != 2)
             throw new InvalidOperationException("Группировка не отображается в двух разделах.");
         SearchBox.Text = "102";
+        ApplyOverviewSearch();
+        if (ClearOverviewSearchButton.Visibility != Visibility.Visible ||
+            ProcessCountText.Text != "Найдено 1 из 2 приложения")
+            throw new InvalidOperationException("Сброс и количество результатов поиска в обзоре не работают.");
         if (ProcessGrid.Items.Count != 1)
             throw new InvalidOperationException("Поиск по PID в обзоре не работает.");
         GroupSearchBox.Text = "beta";
+        ApplyDetailSearch();
+        if (ClearGroupSearchButton.Visibility != Visibility.Visible ||
+            GroupCountText.Text != "Найдено 1 из 2 приложения")
+            throw new InvalidOperationException("Сброс и количество результатов поиска процессов не работают.");
         if (GroupGrid.Items.Count != 1)
             throw new InvalidOperationException("Поиск по приложению не работает.");
         SearchBox.Clear();
         GroupSearchBox.Clear();
+        if (ClearOverviewSearchButton.Visibility != Visibility.Collapsed ||
+            ClearGroupSearchButton.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Кнопки сброса не скрылись после очистки поиска.");
+        if (!ProcessGrid.EnableRowVirtualization || !GroupGrid.EnableRowVirtualization ||
+            !ProcessGrid.EnableColumnVirtualization || !GroupGrid.EnableColumnVirtualization ||
+            VirtualizingPanel.GetVirtualizationMode(ProcessGrid) != VirtualizationMode.Recycling ||
+            VirtualizingPanel.GetVirtualizationMode(GroupGrid) != VirtualizationMode.Recycling)
+            throw new InvalidOperationException("Виртуализация таблиц процессов отключена.");
         ActivateSection(Section.Processes);
         if (ProcessesPage.Visibility != Visibility.Visible || OverviewPage.Visibility != Visibility.Collapsed)
             throw new InvalidOperationException("Раздел процессов не открылся.");
@@ -678,6 +742,8 @@ public partial class MainWindow : Window
         }
         _timer.Stop();
         _updateTimer.Stop();
+        _overviewSearchTimer.Stop();
+        _detailSearchTimer.Stop();
         if (_tray is not null)
         {
             _tray.Visible = false;

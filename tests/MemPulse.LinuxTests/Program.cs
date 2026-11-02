@@ -28,6 +28,12 @@ Assert(LinuxProcfs.ParseMemInfo("MemTotal: 100 kB\nMemAvailable: 999 kB").Availa
     "clamp MemAvailable to physical RAM");
 try { LinuxProcfs.ParseMemInfo("Cached: 1000 kB"); throw new Exception("should have thrown"); }
 catch (InvalidDataException) { Console.WriteLine("PASS: missing MemTotal rejected"); }
+Assert(RussianText.Applications(1) == "1 приложение" &&
+    RussianText.Applications(2) == "2 приложения" &&
+    RussianText.Applications(5) == "5 приложений" &&
+    RussianText.Applications(11) == "11 приложений" &&
+    RussianText.Applications(21) == "21 приложение" &&
+    RussianText.Applications(112) == "112 приложений", "Russian application count declension");
 var p = LinuxProcfs.ParseProcessStatus(123, "Name:\tmy process\nVmRSS:\t1234 kB\nVmData:\t4567 kB");
 Assert(p.Pid == 123 && p.Name == "my process" &&
        p.WorkingBytes == 1234L * 1024 && p.PrivateBytes == 4567L * 1024, "process status fields");

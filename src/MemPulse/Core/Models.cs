@@ -34,6 +34,16 @@ public static class Format
 
 public static class RussianText
 {
+    public static string Applications(int count)
+    {
+        int lastTwo = count % 100;
+        int last = count % 10;
+        string noun = lastTwo is >= 11 and <= 14 ? "приложений"
+            : last == 1 ? "приложение"
+            : last is >= 2 and <= 4 ? "приложения" : "приложений";
+        return count + " " + noun;
+    }
+
     public static string Processes(int count)
     {
         int lastTwo = count % 100;

@@ -6,6 +6,10 @@ namespace MemPulse.Core;
 
 public sealed class SettingsStore
 {
+    // All SettingsStore instances in this process share one file-operation gate.
+    // Windows can reject overlapping File.Move(overwrite: true) operations even
+    // when each writer uses its own unique staging file.
+    private static readonly object IoGate = new();
     private readonly string _pathName;
 
     public SettingsStore(string? path = null) =>
@@ -14,34 +18,40 @@ public sealed class SettingsStore
 
     public AppSettings Load()
     {
-        try
+        lock (IoGate)
         {
-            if (File.Exists(_pathName))
-                return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_pathName)));
+            try
+            {
+                if (File.Exists(_pathName))
+                    return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_pathName)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                StartupLog.Warn("Не удалось загрузить настройки, используются значения по умолчанию", ex);
+            }
+            return new AppSettings();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            StartupLog.Warn("Не удалось загрузить настройки, используются значения по умолчанию", ex);
-        }
-        return new AppSettings();
     }
 
     public void Save(AppSettings settings)
     {
-        var directory = Path.GetDirectoryName(_pathName)!;
-        Directory.CreateDirectory(directory);
-        // Unique staging files prevent concurrent saves and stale .tmp files from colliding.
-        var temp = Path.Combine(directory, "." + Path.GetFileName(_pathName) + "." +
-            Guid.NewGuid().ToString("N") + ".tmp");
-        try
+        lock (IoGate)
         {
-            File.WriteAllText(temp, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()),
-                new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temp, _pathName, true);
-        }
-        finally
-        {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            var directory = Path.GetDirectoryName(_pathName)!;
+            Directory.CreateDirectory(directory);
+            // Unique staging files still isolate interrupted writes and stale .tmp files.
+            var temp = Path.Combine(directory, "." + Path.GetFileName(_pathName) + "." +
+                Guid.NewGuid().ToString("N") + ".tmp");
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()),
+                    new JsonSerializerOptions { WriteIndented = true }));
+                File.Move(temp, _pathName, true);
+            }
+            finally
+            {
+                try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
         }
     }
 }

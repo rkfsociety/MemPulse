@@ -112,6 +112,12 @@ try
         Task.Run(() => store.Save(new AppSettings { RefreshSeconds = 6 })));
     Assert(store.Load().RefreshSeconds is 5 or 6,
         "concurrent settings saves leave a complete valid snapshot");
+    // Different SettingsStore objects targeting the same path must also serialize
+    // replacements; otherwise Windows intermittently rejects File.Move(overwrite).
+    await Task.WhenAll(Enumerable.Range(0, 16).Select(i => Task.Run(() =>
+        new SettingsStore(settingsPath).Save(new AppSettings { RefreshSeconds = i % 10 + 1 }))));
+    Assert(store.Load().RefreshSeconds is >= 1 and <= 10,
+        "concurrent settings saves across instances preserve a complete snapshot");
     Assert(!Directory.EnumerateFiles(settingsDirectory, "*.tmp").Any(),
         "settings staging files are removed after saving");
 }

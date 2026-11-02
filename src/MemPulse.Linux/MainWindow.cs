@@ -39,6 +39,7 @@ public sealed class MainWindow : Window
     };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private IReadOnlyList<ProcessGroupUsage> _groups = [];
+    private readonly HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     private string _operationStatus = "Мониторинг работает без прав администратора.";
 
     public MainWindow()
@@ -228,6 +229,13 @@ public sealed class MainWindow : Window
     private void RenderProcesses()
     {
         string query = _filter.Text?.Trim() ?? "";
+        // Preserve expanded PID groups across the two-second refresh cycle.
+        foreach (var old in _rows.Children.OfType<Expander>())
+        {
+            if (old.Tag is not string name) continue;
+            if (old.IsExpanded) _expandedGroups.Add(name);
+            else _expandedGroups.Remove(name);
+        }
         _rows.Children.Clear();
         foreach (var group in _groups.Where(g => g.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
                      .Take(100))
@@ -269,6 +277,8 @@ public sealed class MainWindow : Window
             }
             var expander = new Expander
             {
+                Tag = group.Name,
+                IsExpanded = _expandedGroups.Contains(group.Name),
                 Header = new TextBlock
                 {
                     Text = group.DisplayName + "  ·  RSS " + group.WorkingText +

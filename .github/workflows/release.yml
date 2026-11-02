@@ -96,6 +96,11 @@ jobs:
         shell: pwsh
         run: dotnet run --project tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
 
+      - name: Linux core smoke tests
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        run: dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj --configuration Release
+
       - name: Test brand icon and RAM percentage rendering
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
@@ -155,11 +160,26 @@ jobs:
           }
           $lines | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
 
+      # Preserve verified installers even if the GitHub Release API denies publication.
+      - name: Preserve verified build artifacts
+        if: steps.version.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mempulse-${{ env.APP_VERSION }}-release-candidate
+          path: |
+            publish/MemPulse.exe
+            dist/MemPulse-Setup-x64.exe
+            dist/MemPulse-linux-x64.tar.gz
+            dist/MemPulse-linux-arm64.tar.gz
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Create version tag and publish GitHub Release
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.MEMPULSE_RELEASE_TOKEN || github.token }}
         run: |
           # 'gh release create' creates the Git tag automatically if it does not exist.
           # It then publishes the same commit and attaches verified build artifacts.
@@ -174,47 +194,8 @@ jobs:
             --title "MemPulse $env:APP_VERSION" `
             --generate-notes `
             --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::error::Release publication failed. If GitHub reports HTTP 403, configure the MEMPULSE_RELEASE_TOKEN repository secret with Contents: read/write permission.'
+            throw 'Release publication failed.'
+          }
 
-      - name: Remove superseded MemPulse releases and version tags
-        if: steps.version.outputs.publish == 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tag = $env:TAG
-          if ($tag -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
-            throw 'Invalid current release version; refusing cleanup.'
-          }
-          $current = [version]$tag.Substring(1)
-          $published = gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,isDraft,assets | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or $published.isDraft -or $published.tagName -cne $tag) {
-            throw 'New release is not published; refusing cleanup.'
-          }
-          foreach ($asset in @('MemPulse.exe', 'MemPulse-Setup-x64.exe', 'MemPulse-linux-x64.tar.gz', 'MemPulse-linux-arm64.tar.gz', 'SHA256SUMS.txt')) {
-            if ($asset -cnotin @($published.assets | ForEach-Object { $_.name })) {
-              throw "Missing release asset $asset; refusing cleanup."
-            }
-          }
-          $releases = gh release list --repo $env:GITHUB_REPOSITORY --limit 1000 --json tagName,isDraft | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot list releases.' }
-          foreach ($old in $releases) {
-            if ($old.isDraft -or $old.tagName -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { continue }
-            if ([version]$old.tagName.Substring(1) -ge $current) { continue }
-            Write-Host "Deleting older release and tag $($old.tagName)"
-            gh release delete $old.tagName --cleanup-tag --yes --repo $env:GITHUB_REPOSITORY
-            if ($LASTEXITCODE -ne 0) { throw "Failed to delete $($old.tagName)" }
-          }
-          # Also remove version tags whose releases were removed separately in the past.
-          $remoteRefs = @(git ls-remote --tags --refs origin)
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot read remote tag list.' }
-          foreach ($ref in $remoteRefs) {
-            if ($ref -notmatch 'refs/tags/(v[^\s]+)$') { continue }
-            $candidate = $Matches[1]
-            if ($candidate -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { continue }
-            if ([version]$candidate.Substring(1) -ge $current) { continue }
-            Write-Host "Removing orphaned version tag $candidate"
-            git push origin --delete "refs/tags/$candidate"
-            if ($LASTEXITCODE -ne 0) { throw "Failed to remove old version tag $candidate" }
-          }

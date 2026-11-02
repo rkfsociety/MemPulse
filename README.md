@@ -65,6 +65,10 @@ dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Rel
 dotnet run --project src/MemPulse.Linux/MemPulse.Linux.csproj -c Release
 ```
 
+## Автоматические релизы
+
+При повышении версии в `src/MemPulse/MemPulse.csproj` на ветке `main` GitHub Actions собирает Windows и Linux, выполняет проверки и публикует Release. Версии обоих проектов должны совпадать. Если публикация отклонена с `HTTP 403: Resource not accessible by integration`, можно добавить секрет репозитория `MEMPULSE_RELEASE_TOKEN` — fine-grained GitHub token с правом **Contents: Read and write** для этого репозитория. В отсутствие секрета используется стандартный `GITHUB_TOKEN`. После настройки можно повторить workflow через **Run workflow** без нового коммита; артефакты сборки сохраняются в запуске Actions на 14 дней даже при ошибке публикации.
+
 ## Если возникла ошибка
 
 В Windows откройте в Проводнике `%LOCALAPPDATA%\MemPulse\Logs` и приложите свежий файл `.log` к [сообщению о проблеме](https://github.com/rkfsociety/MemPulse/issues). Перед отправкой проверьте журнал на наличие личных путей и других данных.

@@ -56,6 +56,26 @@ Assert(candidates.Count == 1 && candidates[0].Address == 0x100000 && candidates[
     "bounded page-out only selects anonymous private writable maps");
 Assert(LinuxProcessMemory.ParseEligibleMappings(maps, 0).Count == 0, "zero budget cannot pageout");
 
+const string guardedMaps = """
+200000-220000 rw-p 00000000 08:01 333
+220000-240000 rw-p 00000000 00:00 0 [stack]
+240000-260000 rw-p 00000000 00:00 0 [anon:managed heap]
+260000-280000 rw-p 00000000 00:00 0
+""";
+var guarded = LinuxProcessMemory.ParseEligibleMappings(guardedMaps, 256 * 1024, 65536);
+Assert(guarded.Count == 2 && guarded[0].Address == 0x240000 &&
+       guarded[1].Address == 0x260000 && guarded.All(m => m.Length == 128 * 1024),
+    "page-out rejects file-backed and stack maps while retaining anonymous regions");
+var limited = LinuxProcessMemory.ParseEligibleMappings(guardedMaps, 100000, 65536);
+Assert(limited.Count == 1 && limited[0].Length == 65536,
+    "page-out budget is aligned to the actual Linux page size");
+try
+{
+    LinuxProcessMemory.ParseEligibleMappings(guardedMaps, 4096, 3000);
+    throw new Exception("invalid page size was accepted");
+}
+catch (ArgumentOutOfRangeException) { Console.WriteLine("PASS: invalid page size rejected"); }
+
 if (OperatingSystem.IsLinux())
 {
     var live = new LinuxProcfs();

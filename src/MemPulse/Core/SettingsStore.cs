@@ -6,15 +6,18 @@ namespace MemPulse.Core;
 
 public sealed class SettingsStore
 {
-    private static string PathName => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemPulse", "settings.json");
+    private readonly string _pathName;
+
+    public SettingsStore(string? path = null) =>
+        _pathName = path ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemPulse", "settings.json");
 
     public AppSettings Load()
     {
         try
         {
-            if (File.Exists(PathName))
-                return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(PathName)));
+            if (File.Exists(_pathName))
+                return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_pathName)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -25,18 +28,20 @@ public sealed class SettingsStore
 
     public void Save(AppSettings settings)
     {
-        var directory = Path.GetDirectoryName(PathName)!;
+        var directory = Path.GetDirectoryName(_pathName)!;
         Directory.CreateDirectory(directory);
-        var temp = PathName + ".tmp";
+        // Unique staging files prevent concurrent saves and stale .tmp files from colliding.
+        var temp = Path.Combine(directory, "." + Path.GetFileName(_pathName) + "." +
+            Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             File.WriteAllText(temp, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()),
                 new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temp, PathName, true);
+            File.Move(temp, _pathName, true);
         }
         finally
         {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch (IOException) { }
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 }

@@ -76,4 +76,27 @@ Assert(extreme.Count == 2 && extreme[0].WorkingBytes == long.MaxValue &&
 Assert(extreme[1].WorkingBytes == 0 && extreme[1].PrivateBytes == 0 &&
        extreme[1].RelativeLoad == 0, "negative process sizes do not affect group totals");
 
+string settingsDirectory = Path.Combine(Path.GetTempPath(), "MemPulse-settings-smoke-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(settingsDirectory);
+    string settingsPath = Path.Combine(settingsDirectory, "settings.json");
+    Directory.CreateDirectory(settingsPath + ".tmp"); // A leftover legacy staging path must not block saving.
+    var store = new SettingsStore(settingsPath);
+    store.Save(new AppSettings { RefreshSeconds = 4, AutoCleanThreshold = 85 });
+    Assert(store.Load() is { RefreshSeconds: 4, AutoCleanThreshold: 85 },
+        "settings persist despite stale legacy staging path");
+    await Task.WhenAll(
+        Task.Run(() => store.Save(new AppSettings { RefreshSeconds = 5 })),
+        Task.Run(() => store.Save(new AppSettings { RefreshSeconds = 6 })));
+    Assert(store.Load().RefreshSeconds is 5 or 6,
+        "concurrent settings saves leave a complete valid snapshot");
+    Assert(!Directory.EnumerateFiles(settingsDirectory, "*.tmp").Any(),
+        "settings staging files are removed after saving");
+}
+finally
+{
+    if (Directory.Exists(settingsDirectory)) Directory.Delete(settingsDirectory, true);
+}
+
 Console.WriteLine("All smoke tests passed.");

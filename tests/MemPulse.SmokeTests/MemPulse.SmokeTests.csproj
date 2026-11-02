@@ -12,5 +12,7 @@
     <Compile Include="../../src/MemPulse/Core/ProcessGrouping.cs" Link="ProcessGrouping.cs" />
     <Compile Include="../../src/MemPulse/Core/ProcessSnapshotCollection.cs" Link="ProcessSnapshotCollection.cs" />
     <Compile Include="../../src/MemPulse/Core/UpdateService.cs" Link="UpdateService.cs" />
+    <Compile Include="../../src/MemPulse/Core/SettingsStore.cs" Link="SettingsStore.cs" />
+    <Compile Include="../../src/MemPulse/Core/StartupLog.cs" Link="StartupLog.cs" />
   </ItemGroup>
 </Project>

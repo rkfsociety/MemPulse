@@ -33,6 +33,12 @@ public sealed class MainWindow : Window
     private readonly TextBlock _status = new() { Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly ProgressBar _usageBar = new() { Minimum = 0, Maximum = 100, Height = 8, Foreground = Highlight, Background = Track };
     private readonly TextBox _filter = new() { Watermark = "Поиск имени или PID", Width = 240 };
+    private readonly ComboBox _sort = new()
+    {
+        ItemsSource = new[] { "ОЗУ ↓", "Data ↓", "Имя А–Я", "Процессов ↓" },
+        SelectedIndex = 0, Width = 165, MinHeight = 36
+    };
+    private readonly Button _clearFilter = new() { Content = "Сбросить", IsVisible = false };
     private readonly StackPanel _rows = new() { Spacing = 4 };
     private readonly ScrollViewer _processScroll = new();
     private int _processTotal;
@@ -65,6 +71,14 @@ public sealed class MainWindow : Window
         _cooldown.Value = _settings.AutoCleanCooldownMinutes;
         StyleAction(_cleanButton);
         StyleAction(_applyButton, primary: true);
+        StyleAction(_clearFilter);
+        _sort.Background = Raised;
+        _sort.Foreground = Text;
+        _sort.BorderBrush = Stroke;
+        _sort.BorderThickness = new Thickness(1);
+        _sort.Padding = new Thickness(11, 7);
+        ToolTip.SetTip(_sort, "Сортировка приложений по использованию памяти, имени или числу процессов");
+        ToolTip.SetTip(_clearFilter, "Очистить поиск процессов");
         _filter.Background = Raised;
         _filter.Foreground = Text;
         _filter.BorderBrush = Stroke;
@@ -214,10 +228,8 @@ public sealed class MainWindow : Window
             CornerRadius = new CornerRadius(12), Padding = new Thickness(15), Child = automatic
         });
 
-        var processHeading = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 10, 0, 6)
-        };
+        // A separate wrapping control row stays usable on narrow or scaled displays.
+        var processHeading = new StackPanel { Spacing = 9, Margin = new Thickness(0, 10, 0, 6) };
         processHeading.Children.Add(new StackPanel
         {
             Spacing = 4,
@@ -227,8 +239,24 @@ public sealed class MainWindow : Window
                 _processCount
             }
         });
-        Grid.SetColumn(_filter, 1);
-        processHeading.Children.Add(_filter);
+        var processControls = new WrapPanel { Orientation = Orientation.Horizontal };
+        _sort.Margin = new Thickness(0, 0, 9, 8);
+        _filter.Margin = new Thickness(0, 0, 9, 8);
+        _clearFilter.Margin = new Thickness(0, 0, 0, 8);
+        processControls.Children.Add(_sort);
+        processControls.Children.Add(_filter);
+        processControls.Children.Add(_clearFilter);
+        processHeading.Children.Add(processControls);
+        _sort.SelectionChanged += (_, _) =>
+        {
+            _visibleGroupLimit = ProcessPageSize;
+            RenderProcesses();
+        };
+        _clearFilter.Click += (_, _) =>
+        {
+            _filter.Clear();
+            _filter.Focus();
+        };
         _filterDebounce.Tick += (_, _) =>
         {
             _filterDebounce.Stop();
@@ -237,6 +265,7 @@ public sealed class MainWindow : Window
         };
         _filter.TextChanged += (_, _) =>
         {
+            _clearFilter.IsVisible = !string.IsNullOrWhiteSpace(_filter.Text);
             _filterDebounce.Stop();
             _filterDebounce.Start();
         };
@@ -283,7 +312,9 @@ public sealed class MainWindow : Window
         shell.Children.Contains(_processScroll) &&
         _processScroll.Content is StackPanel dashboard &&
         dashboard.Children.OfType<Border>().Any(card => ReferenceEquals(card.Child, _rows)) &&
-        shell.Children.OfType<StackPanel>().Any(section => section.Children.Contains(_status));
+        shell.Children.OfType<StackPanel>().Any(section => section.Children.Contains(_status)) &&
+        _sort.ItemsSource is string[] { Length: 4 } &&
+        _sort.SelectedIndex == 0;
 
     private static TextBlock Metric() =>
         new() { FontSize = 18, FontWeight = FontWeight.SemiBold, Foreground = Text };
@@ -381,7 +412,8 @@ public sealed class MainWindow : Window
     private void RenderProcesses(bool resetScroll = false)
     {
         string query = _filter.Text?.Trim() ?? "";
-        var matches = ProcessGrouping.Filter(_groups, query);
+        var matches = ProcessGrouping.Sort(ProcessGrouping.Filter(_groups, query),
+            (ProcessSortOrder)Math.Clamp(_sort.SelectedIndex, 0, 3));
         _processCount.Text = query.Length == 0
             ? $"{_groups.Count} приложений · {_processTotal} процессов"
             : $"Найдено {matches.Count} из {_groups.Count} приложений";

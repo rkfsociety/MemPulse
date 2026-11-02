@@ -76,6 +76,21 @@ Assert(extreme.Count == 2 && extreme[0].WorkingBytes == long.MaxValue &&
 Assert(extreme[1].WorkingBytes == 0 && extreme[1].PrivateBytes == 0 &&
        extreme[1].RelativeLoad == 0, "negative process sizes do not affect group totals");
 
+var sortable = ProcessGrouping.Build([
+    new ProcessUsage(1, "zeta", 1200, 50),
+    new ProcessUsage(2, "alpha", 250, 100),
+    new ProcessUsage(3, "ALPHA", 250, 100),
+    new ProcessUsage(4, "beta", 800, 900)
+]);
+Assert(ReferenceEquals(ProcessGrouping.Sort(sortable, ProcessSortOrder.WorkingMemory), sortable) &&
+       sortable[0].Name == "zeta", "default sorting retains the working-memory order");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.Name).Select(g => g.Name)
+       .SequenceEqual(["alpha", "beta", "zeta"]), "sort processes alphabetically");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.PrivateMemory)[0].Name == "beta",
+    "sort processes by private/data memory");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.ProcessCount)[0].Name == "alpha",
+    "sort processes by group size");
+
 string settingsDirectory = Path.Combine(Path.GetTempPath(), "MemPulse-settings-smoke-" + Guid.NewGuid().ToString("N"));
 try
 {

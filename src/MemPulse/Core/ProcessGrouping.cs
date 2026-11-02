@@ -20,8 +20,35 @@ public sealed record ProcessGroupUsage(
     public string PidsText => string.Join(", ", Members.Select(x => x.Pid));
 }
 
+public enum ProcessSortOrder
+{
+    WorkingMemory,
+    PrivateMemory,
+    Name,
+    ProcessCount
+}
+
 public static class ProcessGrouping
 {
+    /// <summary>Stable, predictable ordering for the process dashboard.</summary>
+    public static IReadOnlyList<ProcessGroupUsage> Sort(
+        IReadOnlyList<ProcessGroupUsage> groups, ProcessSortOrder order) =>
+        order switch
+        {
+            ProcessSortOrder.PrivateMemory => groups
+                .OrderByDescending(g => g.PrivateBytes)
+                .ThenByDescending(g => g.WorkingBytes)
+                .ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
+            ProcessSortOrder.Name => groups
+                .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(g => g.WorkingBytes).ToArray(),
+            ProcessSortOrder.ProcessCount => groups
+                .OrderByDescending(g => g.Count)
+                .ThenByDescending(g => g.WorkingBytes)
+                .ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToArray(),
+            _ => groups // Build() already orders by working set.
+        };
+
     // A corrupted or unusually large snapshot must not crash the UI with a long overflow.
     private static long SaturatingSum(IEnumerable<long> values)
     {

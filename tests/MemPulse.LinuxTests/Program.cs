@@ -42,6 +42,21 @@ var many = ProcessGrouping.Build(Enumerable.Range(1, 250)
 Assert(many.Count == 250 && ProcessGrouping.Filter(many, "app").Count == 250,
     "large process lists remain complete for progressive paging");
 
+var sortable = ProcessGrouping.Build([
+    new ProcessUsage(1, "zeta", 1200, 50),
+    new ProcessUsage(2, "alpha", 250, 100),
+    new ProcessUsage(3, "ALPHA", 250, 100),
+    new ProcessUsage(4, "beta", 800, 900)
+]);
+Assert(ReferenceEquals(ProcessGrouping.Sort(sortable, ProcessSortOrder.WorkingMemory), sortable) &&
+       sortable[0].Name == "zeta", "default sorting retains the working-memory order");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.Name).Select(g => g.Name)
+       .SequenceEqual(["alpha", "beta", "zeta"]), "sort processes alphabetically");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.PrivateMemory)[0].Name == "beta",
+    "sort processes by private/data memory");
+Assert(ProcessGrouping.Sort(sortable, ProcessSortOrder.ProcessCount)[0].Name == "alpha",
+    "sort processes by group size");
+
 string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 18)) + " 123456 0 0";
 Assert(LinuxProcfs.TryParseStartTicks(stat, out var ticks) && ticks == 123456, "stat parsing with spaces and brackets");
 Assert(!LinuxProcfs.TryParseStartTicks("broken", out _), "reject invalid proc stat");

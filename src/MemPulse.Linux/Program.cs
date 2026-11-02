@@ -53,6 +53,8 @@ internal sealed class LinuxApp : Application
             {
                 if (!window.VerifyScrollableLayoutForSmokeTest())
                     throw new InvalidOperationException("Linux dashboard must scroll as a single surface.");
+                if (!window.VerifyProcessRowReuseForSmokeTest())
+                    throw new InvalidOperationException("Linux process rows must retain focusable controls on refresh.");
                 Dispatcher.UIThread.Post(() => desktop.Shutdown(0), DispatcherPriority.Background);
             }
         }

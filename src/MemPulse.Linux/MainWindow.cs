@@ -316,6 +316,41 @@ public sealed class MainWindow : Window
         _sort.ItemsSource is string[] { Length: 4 } &&
         _sort.SelectedIndex == 0;
 
+    // Startup smoke test: a live refresh must preserve expanded controls and
+    // their PID buttons, including when sorting moves the group to another row.
+    internal bool VerifyProcessRowReuseForSmokeTest()
+    {
+        _groups = ProcessGrouping.Build([
+            new ProcessUsage(101, "alpha", 4096, 1024),
+            new ProcessUsage(202, "beta", 2048, 512)
+        ]);
+        _processTotal = 2;
+        RenderProcesses();
+        var rows = _rows.Children.OfType<Expander>().ToArray();
+        if (rows.Length != 2) return false;
+        var alpha = rows[0];
+        var beta = rows[1];
+        alpha.IsExpanded = true;
+        UpdateProcessDetails(alpha, _groups[0]);
+        if (alpha.Content is not StackPanel details || details.Children.Count != 1 ||
+            details.Children[0] is not Grid pidRow || pidRow.Children[3] is not Button trim)
+            return false;
+
+        _groups = ProcessGrouping.Build([
+            new ProcessUsage(101, "alpha", 8192, 3072),
+            new ProcessUsage(202, "beta", 16384, 4096)
+        ]);
+        RenderProcesses();
+        rows = _rows.Children.OfType<Expander>().ToArray();
+        return rows.Length == 2 &&
+            ReferenceEquals(rows[0], beta) &&
+            ReferenceEquals(rows[1], alpha) &&
+            ReferenceEquals(alpha.Content, details) &&
+            ReferenceEquals(((Grid)details.Children[0]).Children[3], trim) &&
+            ((TextBlock)((Grid)alpha.Header!).Children[1]).Text == "RSS  " + _groups[1].WorkingText &&
+            ((TextBlock)((Grid)details.Children[0]).Children[1]).Text == _groups[1].Members[0].WorkingText;
+    }
+
     private static TextBlock Metric() =>
         new() { FontSize = 18, FontWeight = FontWeight.SemiBold, Foreground = Text };
 
@@ -421,40 +456,54 @@ public sealed class MainWindow : Window
         if (matches.Count > visible)
             _processCount.Text += $" · показано {visible}";
 
-        // Refreshing live process numbers must not throw the reader back to the top.
+        // Keep visible Expander instances (and focused PID buttons) across live
+        // snapshots. Only reorder rows when the actual sort order changes.
         var previousOffset = _processScroll.Offset;
-        foreach (var old in _rows.Children.OfType<Expander>())
+        var previous = _rows.Children.OfType<Expander>()
+            .Where(row => row.Tag is ProcessGroupUsage)
+            .ToDictionary(row => ((ProcessGroupUsage)row.Tag!).Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var old in previous.Values)
         {
-            if (old.Tag is not string name) continue;
+            var name = ((ProcessGroupUsage)old.Tag!).Name;
             if (old.IsExpanded) _expandedGroups.Add(name);
             else _expandedGroups.Remove(name);
         }
-        _rows.Children.Clear();
+
+        var desired = new List<Control>(visible + 1);
         foreach (var group in matches.Take(visible))
         {
-            bool expanded = _expandedGroups.Contains(group.Name);
-            var expander = new Expander
+            if (!previous.TryGetValue(group.Name, out var expander))
             {
-                Tag = group.Name,
-                IsExpanded = expanded,
-                Header = CreateGroupHeader(group)
-            };
-            // Build PID rows only for open groups. Large process lists no longer
-            // allocate hundreds of invisible buttons every two seconds.
-            if (expanded)
-                expander.Content = CreateProcessDetails(group);
-            expander.Expanded += (_, _) =>
+                expander = new Expander
+                {
+                    Tag = group,
+                    IsExpanded = _expandedGroups.Contains(group.Name),
+                    Header = CreateGroupHeader(group)
+                };
+                // Resolve the current snapshot from Tag instead of capturing a
+                // stale group in the event handler.
+                expander.Expanded += (_, _) =>
+                {
+                    if (expander.Tag is not ProcessGroupUsage current) return;
+                    _expandedGroups.Add(current.Name);
+                    UpdateProcessDetails(expander, current);
+                };
+                expander.Collapsed += (_, _) =>
+                {
+                    if (expander.Tag is ProcessGroupUsage current)
+                        _expandedGroups.Remove(current.Name);
+                    expander.Content = null;
+                };
+            }
+            else
             {
-                _expandedGroups.Add(group.Name);
-                if (expander.Content is null)
-                    expander.Content = CreateProcessDetails(group);
-            };
-            expander.Collapsed += (_, _) =>
-            {
-                _expandedGroups.Remove(group.Name);
-                expander.Content = null;
-            };
-            _rows.Children.Add(expander);
+                expander.Tag = group;
+                UpdateGroupHeader(expander, group);
+            }
+
+            if (expander.IsExpanded)
+                UpdateProcessDetails(expander, group);
+            desired.Add(expander);
         }
         if (matches.Count > visible)
         {
@@ -471,21 +520,75 @@ public sealed class MainWindow : Window
                 _visibleGroupLimit += ProcessPageSize;
                 RenderProcesses();
             };
-            _rows.Children.Add(more);
+            desired.Add(more);
         }
-        if (_rows.Children.Count == 0)
-            _rows.Children.Add(new TextBlock
+        if (desired.Count == 0)
+            desired.Add(new TextBlock
             {
                 Text = "Процессы не найдены.", Foreground = Muted,
                 Margin = new Thickness(12)
             });
-        Dispatcher.UIThread.Post(() =>
+
+        bool layoutChanged = false;
+        for (int index = 0; index < desired.Count; index++)
         {
-            // Filtering should reveal the search field and results, not jump to
-            // the top of the memory dashboard. Live refresh keeps its position.
-            if (resetScroll) _filter.BringIntoView();
-            else _processScroll.Offset = previousOffset;
-        }, DispatcherPriority.Loaded);
+            if (index < _rows.Children.Count && ReferenceEquals(_rows.Children[index], desired[index]))
+                continue;
+            if (_rows.Children.Contains(desired[index]))
+                _rows.Children.Remove(desired[index]);
+            _rows.Children.Insert(index, desired[index]);
+            layoutChanged = true;
+        }
+        while (_rows.Children.Count > desired.Count)
+        {
+            _rows.Children.RemoveAt(_rows.Children.Count - 1);
+            layoutChanged = true;
+        }
+
+        // Unchanged rows do not need a layout reset, preserving keyboard focus
+        // and avoiding needless scroll jumps on the two-second refresh timer.
+        if (resetScroll)
+            Dispatcher.UIThread.Post(() => _filter.BringIntoView(), DispatcherPriority.Loaded);
+        else if (layoutChanged)
+            Dispatcher.UIThread.Post(() => _processScroll.Offset = previousOffset, DispatcherPriority.Loaded);
+    }
+
+    private static void UpdateGroupHeader(Expander expander, ProcessGroupUsage group)
+    {
+        if (expander.Header is not Grid header || header.Children.Count != 3)
+        {
+            expander.Header = CreateGroupHeader(group);
+            return;
+        }
+        ((TextBlock)header.Children[0]).Text = group.DisplayName;
+        ((TextBlock)header.Children[1]).Text = "RSS  " + group.WorkingText;
+        ((TextBlock)header.Children[2]).Text = "Data  " + group.PrivateText;
+    }
+
+    private void UpdateProcessDetails(Expander expander, ProcessGroupUsage group)
+    {
+        if (expander.Content is not StackPanel details || details.Children.Count != group.Members.Count)
+        {
+            expander.Content = CreateProcessDetails(group);
+            return;
+        }
+        for (int index = 0; index < group.Members.Count; index++)
+        {
+            if (details.Children[index] is not Grid row ||
+                row.Tag is not int pid || pid != group.Members[index].Pid)
+            {
+                expander.Content = CreateProcessDetails(group);
+                return;
+            }
+        }
+        for (int index = 0; index < group.Members.Count; index++)
+        {
+            var row = (Grid)details.Children[index];
+            var member = group.Members[index];
+            ((TextBlock)row.Children[0]).Text = "PID " + member.Pid + " · " + member.Name;
+            ((TextBlock)row.Children[1]).Text = member.WorkingText;
+            ((TextBlock)row.Children[2]).Text = member.PrivateText;
+        }
     }
 
     private static Grid CreateGroupHeader(ProcessGroupUsage group)
@@ -524,7 +627,8 @@ public sealed class MainWindow : Window
             var row = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("*,120,120,145"),
-                Margin = new Thickness(8, 4)
+                Margin = new Thickness(8, 4),
+                Tag = member.Pid
             };
             row.Children.Add(new TextBlock
             {

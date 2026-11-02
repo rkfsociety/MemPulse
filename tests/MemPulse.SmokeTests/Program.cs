@@ -65,5 +65,15 @@ Assert(grouped[0].Count == 2 && grouped[0].WorkingBytes == 10000 &&
 Assert(grouped[0].RelativeLoad == 100 && grouped[1].RelativeLoad is > 0 and < 100,
     "relative memory load uses largest aggregated application");
 Assert(ProcessGrouping.Build([]).Count == 0, "empty process snapshots are valid");
+var extreme = ProcessGrouping.Build([
+    new ProcessUsage(31, "large", long.MaxValue, long.MaxValue),
+    new ProcessUsage(32, "LARGE", 10, 20),
+    new ProcessUsage(33, "negative", -1, -1)
+]);
+Assert(extreme.Count == 2 && extreme[0].WorkingBytes == long.MaxValue &&
+       extreme[0].PrivateBytes == long.MaxValue && extreme[0].RelativeLoad == 100,
+    "group totals saturate instead of overflowing long");
+Assert(extreme[1].WorkingBytes == 0 && extreme[1].PrivateBytes == 0 &&
+       extreme[1].RelativeLoad == 0, "negative process sizes do not affect group totals");
 
 Console.WriteLine("All smoke tests passed.");

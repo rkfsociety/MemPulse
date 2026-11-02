@@ -13,27 +13,35 @@
     <Window.Resources>
         <local:ProcessIconConverter x:Key="ProcessIconConverter"/>
         <LinearGradientBrush x:Key="HeroGlow" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#152F39" Offset="0"/>
-            <GradientStop Color="#111F2D" Offset="0.48"/>
-            <GradientStop Color="#111B2A" Offset="1"/>
+            <GradientStop Color="#18343C" Offset="0"/>
+            <GradientStop Color="#132631" Offset="0.48"/>
+            <GradientStop Color="#101D2B" Offset="1"/>
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="SideGlow" StartPoint="0,0" EndPoint="0.9,1">
-            <GradientStop Color="#102D36" Offset="0"/>
-            <GradientStop Color="#0B1521" Offset="0.55"/>
-            <GradientStop Color="#0C1722" Offset="1"/>
+            <GradientStop Color="#102934" Offset="0"/>
+            <GradientStop Color="#0C1925" Offset="0.55"/>
+            <GradientStop Color="#0B1621" Offset="1"/>
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="GraphFill" StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#4C08D6BD" Offset="0"/>
-            <GradientStop Color="#0012C8BB" Offset="1"/>
+            <GradientStop Color="#5520CCAF" Offset="0"/>
+            <GradientStop Color="#0017B49F" Offset="1"/>
         </LinearGradientBrush>
         <Style x:Key="SideButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
-            <Setter Property="Padding" Value="15,13"/>
+            <Setter Property="Padding" Value="15,14"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="13"/>
         </Style>
 
+        <Style x:Key="CloseTitleButton" TargetType="Button" BasedOn="{StaticResource TitleButton}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#542B38"/>
+                    <Setter Property="BorderBrush" Value="#C95C69"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="ProcessRowStyle" TargetType="DataGridRow">
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -41,10 +49,10 @@
             <Setter Property="ToolTipService.ShowDuration" Value="6000"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#203946"/>
+                    <Setter Property="Background" Value="#1D3B48"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#204751"/>
+                    <Setter Property="Background" Value="#22515B"/>
                     <Setter Property="Foreground" Value="#FFFFFF"/>
                 </Trigger>
             </Style.Triggers>
@@ -56,7 +64,7 @@
     </Window.Resources>
     <Grid Background="{StaticResource WindowBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="178"/>
+            <ColumnDefinition Width="196"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -66,18 +74,18 @@
         </Grid.RowDefinitions>
 
         <!-- Custom title bar, still supports normal Windows window dragging. -->
-        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#09131D"
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#0B1823"
                 BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
-            <Grid Margin="20,0,12,0">
+            <Grid Margin="22,0,13,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Image Source="Assets/MemPulse.png" Width="31" Height="31" Stretch="Uniform"/>
-                    <TextBlock Text="MemPulse" FontSize="17" FontWeight="Bold" Margin="11,0,0,0"
+                    <TextBlock Foreground="{StaticResource TextBrush}" Text="MemPulse" FontSize="17" FontWeight="Bold" Margin="11,0,0,0"
                                VerticalAlignment="Center"/>
-                    <Border Margin="13,0,0,0" CornerRadius="6" Background="#16423C"
+                    <Border Margin="15,0,0,0" CornerRadius="8" Background="#153D3B"
                             VerticalAlignment="Center" Padding="8,4">
                         <TextBlock Text="●  МОНИТОРИНГ" Foreground="{StaticResource AccentBrush}"
                                    FontSize="10" FontWeight="SemiBold"/>
@@ -91,7 +99,7 @@
                     <Button Content="−" Style="{StaticResource TitleButton}"
                             ToolTip="Свернуть" Click="Minimize_Click"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Content="×" Style="{StaticResource TitleButton}" FontSize="21"
+                    <Button Content="×" Style="{StaticResource CloseTitleButton}" FontSize="21"
                             ToolTip="Закрыть" Click="Close_Click"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                 </StackPanel>
@@ -101,7 +109,7 @@
         <!-- Compact navigation -->
         <Border Grid.Row="1" Grid.Column="0" BorderThickness="0,0,1,0"
                 BorderBrush="{StaticResource BorderBrushApp}" Background="{StaticResource SideGlow}">
-            <Grid Margin="15,24,15,20">
+            <Grid Margin="17,24,17,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -111,7 +119,7 @@
                     <TextBlock Text="НАВИГАЦИЯ" Style="{StaticResource CardLabel}"
                                Margin="11,0,0,17"/>
                     <Button x:Name="OverviewNav" Content="◈   Обзор" Style="{StaticResource SideButton}"
-                            Foreground="{StaticResource AccentBrush}" Background="#17413F"
+                            Foreground="{StaticResource AccentBrush}" Background="{StaticResource SelectedNavBrush}"
                             Click="Overview_Click"/>
                     <Button x:Name="ProcessesNav" Content="▤   Процессы" Style="{StaticResource SideButton}"
                             Click="Processes_Click"/>
@@ -131,7 +139,7 @@
                     <ProgressBar x:Name="SideUsageBar" Height="5" Minimum="0" Maximum="100"
                                  Margin="10,0,9,15"/>
                     <Border Height="1" Background="{StaticResource BorderBrushApp}" Margin="9,0,9,16"/>
-                    <TextBlock x:Name="VersionText" Text="MemPulse" FontSize="12"
+                    <TextBlock Foreground="{StaticResource TextBrush}" x:Name="VersionText" Text="MemPulse" FontSize="12"
                                FontWeight="SemiBold" Margin="10,0,0,5"/>
                     <TextBlock Text="Мониторинг памяти Windows" Style="{StaticResource MutedText}"
                                FontSize="10" TextWrapping="Wrap" Margin="10,0,3,0"/>
@@ -140,21 +148,21 @@
         </Border>
 
         <Grid Grid.Row="1" Grid.Column="1">
-<Grid x:Name="OverviewPage" Margin="20,17,20,16">
+<Grid x:Name="OverviewPage" Margin="22,19,22,18">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" MinHeight="272"/>
-                <RowDefinition Height="16"/>
+                <RowDefinition Height="18"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="420"/>
-                <ColumnDefinition Width="16"/>
-                <ColumnDefinition Width="284"/>
+                <ColumnDefinition Width="18"/>
+                <ColumnDefinition Width="294"/>
             </Grid.ColumnDefinitions>
 
             <!-- Memory visual and actual rolling history -->
             <Border x:Name="OverviewCard" Grid.Row="0" Grid.Column="0"
-                    Background="{StaticResource HeroGlow}" CornerRadius="14"
+                    Background="{StaticResource HeroGlow}" CornerRadius="16"
                     BorderBrush="#27434D" BorderThickness="1">
                 <Grid Margin="22,19,22,16">
                     <Grid.RowDefinitions>
@@ -182,19 +190,19 @@
                         <Grid Width="166" Height="166" HorizontalAlignment="Left"
                               VerticalAlignment="Center">
                             <Ellipse Width="162" Height="162" Fill="#162E36" Opacity="0.68"/>
-                            <Ellipse Width="148" Height="148" Stroke="#24434C" StrokeThickness="11"/>
-                            <Path x:Name="UsageArc" Width="166" Height="166" Stroke="#16DEBC"
+                            <Ellipse Width="148" Height="148" Stroke="#284954" StrokeThickness="11"/>
+                            <Path x:Name="UsageArc" Width="166" Height="166" Stroke="#35E0C2"
                                   StrokeThickness="11" StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round" SnapsToDevicePixels="True"/>
                             <Ellipse x:Name="FullUsageRing" Width="148" Height="148" Stroke="#FF737D"
                                      StrokeThickness="11" Visibility="Collapsed"/>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Margin="0,-3,0,0">
-                                <TextBlock x:Name="PercentText" Text="—" FontSize="36"
+                                <TextBlock Foreground="{StaticResource TextBrush}" x:Name="PercentText" Text="—" FontSize="38"
                                            FontWeight="Bold" HorizontalAlignment="Center"/>
                                 <TextBlock Text="ЗАНЯТО" FontSize="10" Foreground="{StaticResource MutedBrush}"
                                            HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                <TextBlock x:Name="UsedText" Text="—" FontSize="12"
+                                <TextBlock Foreground="{StaticResource TextBrush}" x:Name="UsedText" Text="—" FontSize="12"
                                            HorizontalAlignment="Center" Margin="0,7,0,0"/>
                             </StackPanel>
                         </Grid>
@@ -213,8 +221,8 @@
                                 <TextBlock x:Name="HistoryRangeText" Grid.Column="1" Text="—"
                                            Style="{StaticResource MutedText}" FontSize="10"/>
                             </Grid>
-                            <Border Grid.Row="1" CornerRadius="7" Background="#112936"
-                                    BorderBrush="#284852" BorderThickness="1" ClipToBounds="True">
+                            <Border Grid.Row="1" CornerRadius="7" Background="#102834"
+                                    BorderBrush="#2A4A57" BorderThickness="1" ClipToBounds="True">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="*"/>
@@ -228,10 +236,10 @@
                                     <Canvas x:Name="HistoryCanvas" Grid.RowSpan="4" ClipToBounds="True"
                                             SizeChanged="HistoryCanvas_SizeChanged">
                                         <Polygon x:Name="HistoryFill" Fill="{StaticResource GraphFill}"/>
-                                        <Polyline x:Name="HistoryLine" Stroke="#39E6CC"
+                                        <Polyline x:Name="HistoryLine" Stroke="#46E7CB"
                                                   StrokeThickness="2.5" StrokeLineJoin="Round"/>
                                         <Ellipse x:Name="HistoryDot" Width="7" Height="7"
-                                                 Fill="#40E8D1" Stroke="#0C202B" StrokeThickness="1.3"
+                                                 Fill="#46E7CB" Stroke="#0C202B" StrokeThickness="1.3"
                                                  Visibility="Collapsed"/>
                                     </Canvas>
                                 </Grid>
@@ -243,12 +251,12 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="ДОСТУПНО" Style="{StaticResource CardLabel}"/>
-                                    <TextBlock x:Name="AvailableText" Text="—" FontSize="17"
+                                    <TextBlock Foreground="{StaticResource TextBrush}" x:Name="AvailableText" Text="—" FontSize="17"
                                                FontWeight="SemiBold" Margin="0,4,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="ВСЕГО" Style="{StaticResource CardLabel}"/>
-                                    <TextBlock x:Name="TotalText" Text="—" FontSize="17"
+                                    <TextBlock Foreground="{StaticResource TextBrush}" x:Name="TotalText" Text="—" FontSize="17"
                                                FontWeight="SemiBold" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Grid>
@@ -259,7 +267,7 @@
 
             <!-- Cleanup controls -->
             <Border Grid.Row="0" Grid.Column="2" Background="{StaticResource PanelBrush}"
-                    CornerRadius="14" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1">
+                    CornerRadius="16" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1">
                 <Grid Margin="17,17,17,14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -267,7 +275,7 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="✦   Очистка памяти" FontSize="16" FontWeight="SemiBold"/>
+                    <TextBlock Foreground="{StaticResource TextBrush}" Text="Очистка памяти" FontSize="16" FontWeight="SemiBold"/>
                     <TextBlock Grid.Row="1" Text="Выберите операции" Style="{StaticResource MutedText}"
                                Margin="0,7,0,7"/>
                     <StackPanel Grid.Row="2">
@@ -290,7 +298,7 @@
 
             <!-- Processes -->
             <Border Grid.Row="2" Grid.Column="0" Background="{StaticResource PanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="14">
+                    BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="16">
                 <Grid Margin="14,16,14,12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -304,7 +312,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Приложения" FontSize="19" FontWeight="SemiBold"/>
+                            <TextBlock Foreground="{StaticResource TextBrush}" Text="Приложения" FontSize="20" FontWeight="SemiBold"/>
                             <TextBlock x:Name="ProcessCountText" Text="Получение списка процессов…"
                                        Style="{StaticResource MutedText}" Margin="0,4,0,0"/>
                         </StackPanel>
@@ -321,8 +329,8 @@
                     <DataGrid x:Name="ProcessGrid" Background="{StaticResource PanelBrush}" Grid.Row="2" AutoGenerateColumns="False"
                               SelectionChanged="ProcessGrid_SelectionChanged" RowHeaderWidth="0"
                               AlternationCount="2" ScrollViewer.CanContentScroll="True"
-                              RowStyle="{StaticResource ProcessRowStyle}" RowHeight="46"
-                              ColumnHeaderHeight="35">
+                              RowStyle="{StaticResource ProcessRowStyle}" RowHeight="49"
+                              ColumnHeaderHeight="39">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="ПРОЦЕСС" Width="*" SortMemberPath="Name">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -344,7 +352,7 @@
                                                        VerticalAlignment="Center" HorizontalAlignment="Center"
                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
                                             </Grid>
-                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
+                                            <TextBlock Foreground="{StaticResource TextBrush}" Grid.Column="1" Text="{Binding DisplayName}"
                                                        FontSize="12" VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis"/>
                                         </Grid>
@@ -357,7 +365,7 @@
                                     <DataTemplate>
                                         <StackPanel VerticalAlignment="Center" Margin="0,2,5,2"
                                                     ToolTip="Полоса — относительная нагрузка среди процессов">
-                                            <TextBlock Text="{Binding WorkingText}" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Foreground="{StaticResource TextBrush}" Text="{Binding WorkingText}" FontSize="12" FontWeight="SemiBold"/>
                                             <ProgressBar Minimum="0" Maximum="100" Height="3"
                                                          Margin="0,6,0,0" Value="{Binding RelativeLoad}"/>
                                         </StackPanel>
@@ -385,7 +393,7 @@
 
             <!-- One cohesive information card instead of two uneven blocks. -->
             <Border Grid.Row="2" Grid.Column="2" Background="{StaticResource PanelBrush}"
-                    CornerRadius="14" BorderThickness="1" BorderBrush="{StaticResource BorderBrushApp}">
+                    CornerRadius="16" BorderThickness="1" BorderBrush="{StaticResource BorderBrushApp}">
                 <Grid Margin="19,18,19,18">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -394,7 +402,7 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Показатели памяти" FontSize="16" FontWeight="SemiBold"/>
+                    <TextBlock Foreground="{StaticResource TextBrush}" Text="Показатели памяти" FontSize="16" FontWeight="SemiBold"/>
                     <Grid Grid.Row="1" Margin="0,16,0,0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -406,12 +414,12 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="СИСТЕМНЫЙ КЭШ" Style="{StaticResource CardLabel}"/>
-                            <TextBlock x:Name="CacheText" Text="—" FontSize="21"
+                            <TextBlock Foreground="{StaticResource TextBrush}" x:Name="CacheText" Text="—" FontSize="21"
                                        FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="ВЫДЕЛЕНО" Style="{StaticResource CardLabel}"/>
-                            <TextBlock x:Name="CommitText" Text="—" FontSize="19"
+                            <TextBlock Foreground="{StaticResource TextBrush}" x:Name="CommitText" Text="—" FontSize="19"
                                        FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,17,0,0">
@@ -437,7 +445,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Автоочистка" FontSize="16" FontWeight="SemiBold"/>
+                            <TextBlock Foreground="{StaticResource TextBrush}" Text="Автоочистка" FontSize="16" FontWeight="SemiBold"/>
                             <Border Grid.Column="1" CornerRadius="6" Background="#19343E"
                                     VerticalAlignment="Center" Padding="8,4">
                                 <TextBlock x:Name="AutoCleanStateText" Text="Отключена"
@@ -455,13 +463,13 @@
             </Border>
         </Grid>
 
-<Grid x:Name="ProcessesPage" Grid.Row="0" Visibility="Collapsed" Margin="20,17,20,16">
- <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="14" Padding="22">
+<Grid x:Name="ProcessesPage" Grid.Row="0" Visibility="Collapsed" Margin="22,19,22,18">
+ <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="16" Padding="22">
   <Grid>
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <DockPanel>
     <Button DockPanel.Dock="Right" Content="↻  Обновить" Click="Refresh_Click" Style="{StaticResource ActionButton}" Padding="14,10"/>
-    <StackPanel><TextBlock Text="Приложения и процессы" FontSize="23" FontWeight="SemiBold"/>
+    <StackPanel><TextBlock Foreground="{StaticResource TextBrush}" Text="Приложения и процессы" FontSize="23" FontWeight="SemiBold"/>
      <TextBlock x:Name="GroupCountText" Text="Загрузка…" Style="{StaticResource MutedText}" Margin="0,5,0,0"/></StackPanel>
    </DockPanel>
    <Grid Grid.Row="1" Margin="0,17,0,15">
@@ -484,9 +492,9 @@
           <DataTemplate>
            <Grid Height="39" Background="Transparent">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="125"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
-            <TextBlock Text="{Binding Name}" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Pid}" Grid.Column="1" VerticalAlignment="Center"/>
-            <TextBlock Text="{Binding WorkingText}" Grid.Column="2" VerticalAlignment="Center"/>
+            <TextBlock Foreground="{StaticResource TextBrush}" Text="{Binding Name}" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Foreground="{StaticResource TextBrush}" Text="{Binding Pid}" Grid.Column="1" VerticalAlignment="Center"/>
+            <TextBlock Foreground="{StaticResource TextBrush}" Text="{Binding WorkingText}" Grid.Column="2" VerticalAlignment="Center"/>
             <Button Grid.Column="3" Content="Очистить PID" Tag="{Binding}" Click="TrimMember_Click" Style="{StaticResource ActionButton}" Padding="9,5" FontSize="11" Margin="0,3,8,3"/>
            </Grid>
           </DataTemplate>
@@ -506,7 +514,7 @@
           <Border CornerRadius="7" Background="#25424B"><TextBlock Text="{Binding Monogram}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource AccentBrush}"/></Border>
           <Image Width="22" Height="22" Source="{Binding IconBytes, Converter={StaticResource ProcessIconConverter}}"/>
          </Grid>
-         <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="13"/>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="13"/>
         </StackPanel>
        </DataTemplate>
       </DataGridTemplateColumn.CellTemplate>
@@ -521,50 +529,50 @@
  </Border>
 </Grid>
 <Grid x:Name="SettingsPage" Visibility="Collapsed" Margin="20,17,20,16">
- <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="14" Padding="24,20">
+ <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="16" Padding="24,20">
   <Grid>
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <StackPanel><TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Мониторинг, автоочистка и Windows" Style="{StaticResource MutedText}" Margin="0,5,0,0"/></StackPanel>
+   <StackPanel><TextBlock Foreground="{StaticResource TextBrush}" Text="Настройки" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Мониторинг, автоочистка и Windows" Style="{StaticResource MutedText}" Margin="0,5,0,0"/></StackPanel>
    <ScrollViewer Grid.Row="1" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
     <StackPanel MaxWidth="850" HorizontalAlignment="Left">
      <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="390"/><ColumnDefinition Width="20"/><ColumnDefinition Width="390"/></Grid.ColumnDefinitions>
       <StackPanel Grid.Column="0">
-       <Border Padding="19" Background="#172B36" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="10">
+       <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12">
         <StackPanel>
-         <TextBlock Text="Мониторинг" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="Мониторинг" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
-          <TextBlock Text="Интервал обновления, сек." VerticalAlignment="Center"/>
+          <TextBlock Foreground="{StaticResource TextBrush}" Text="Интервал обновления, сек." VerticalAlignment="Center"/>
           <TextBox x:Name="RefreshText" Grid.Column="1" TextAlignment="Center" MaxLength="2"/>
          </Grid>
         </StackPanel>
        </Border>
-       <Border Padding="19" Background="#172B36" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="10" Margin="0,15,0,0">
+       <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12" Margin="0,15,0,0">
         <StackPanel>
-         <TextBlock Text="Автоочистка" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="Автоочистка" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
          <CheckBox x:Name="AutoCleanCheck" Content="Очищать кэш ожидания автоматически" Margin="0,0,0,14"/>
          <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
-          <TextBlock Text="Порог ОЗУ, %" VerticalAlignment="Center"/><TextBox x:Name="ThresholdText" Grid.Column="1" TextAlignment="Center" MaxLength="2"/>
+          <TextBlock Foreground="{StaticResource TextBrush}" Text="Порог ОЗУ, %" VerticalAlignment="Center"/><TextBox x:Name="ThresholdText" Grid.Column="1" TextAlignment="Center" MaxLength="2"/>
          </Grid>
          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
-          <TextBlock Text="Пауза, мин." VerticalAlignment="Center"/><TextBox x:Name="CooldownText" Grid.Column="1" TextAlignment="Center" MaxLength="3"/>
+          <TextBlock Foreground="{StaticResource TextBrush}" Text="Пауза, мин." VerticalAlignment="Center"/><TextBox x:Name="CooldownText" Grid.Column="1" TextAlignment="Center" MaxLength="3"/>
          </Grid>
          <TextBlock Text="Автоочистка выполняется только с правами администратора." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,13,0,0"/>
         </StackPanel>
        </Border>
       </StackPanel>
       <StackPanel Grid.Column="2">
-       <Border Padding="19" Background="#172B36" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="10">
+       <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12">
         <StackPanel>
-         <TextBlock Text="Windows и трей" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="Windows и трей" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
          <CheckBox x:Name="StartupCheck" Content="Запускать вместе с Windows"/>
          <CheckBox x:Name="MinimizeCheck" Content="Сворачивать в трей"/>
          <CheckBox x:Name="CloseCheck" Content="При закрытии скрывать в трей"/>
         </StackPanel>
        </Border>
-       <Border Padding="19" Background="#172B36" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="10" Margin="0,15,0,0">
+       <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12" Margin="0,15,0,0">
         <StackPanel>
-         <TextBlock Text="Обновления" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="Обновления" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
          <CheckBox x:Name="UpdateCheck" Content="Автоматически проверять обновления"/>
         </StackPanel>
        </Border>
@@ -583,13 +591,13 @@
  </Border>
 </Grid>
 <Grid x:Name="AboutPage" Visibility="Collapsed" Margin="20,17,20,16">
- <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="14" Padding="30">
+ <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="16" Padding="30">
   <StackPanel HorizontalAlignment="Left" MaxWidth="690">
    <StackPanel Orientation="Horizontal"><Image Source="Assets/MemPulse.png" Width="64" Height="64" Margin="0,0,19,0"/>
-    <StackPanel VerticalAlignment="Center"><TextBlock Text="MemPulse" FontSize="29" FontWeight="Bold"/><TextBlock x:Name="AboutVersionText" Style="{StaticResource MutedText}" Margin="0,6,0,0"/></StackPanel>
+    <StackPanel VerticalAlignment="Center"><TextBlock Foreground="{StaticResource TextBrush}" Text="MemPulse" FontSize="29" FontWeight="Bold"/><TextBlock x:Name="AboutVersionText" Style="{StaticResource MutedText}" Margin="0,6,0,0"/></StackPanel>
    </StackPanel>
    <Border Background="{StaticResource BorderBrushApp}" Height="1" Margin="0,25,0,23"/>
-   <TextBlock Text="Управление памятью Windows" FontSize="20" FontWeight="SemiBold"/>
+   <TextBlock Foreground="{StaticResource TextBrush}" Text="Управление памятью Windows" FontSize="20" FontWeight="SemiBold"/>
    <TextBlock Text="MemPulse показывает использование ОЗУ, объединяет экземпляры процессов по приложениям и позволяет управлять очисткой памяти." TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="0,14,0,0"/>
    <TextBlock Text="Принудительная очистка кэша не увеличивает физическую память и не гарантирует ускорения системы." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,0"/>
    <StackPanel Orientation="Horizontal" Margin="0,28,0,0">
@@ -632,7 +640,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock x:Name="ConfirmTitle" Text="Подтверждение" FontSize="20"
+                    <TextBlock Foreground="{StaticResource TextBrush}" x:Name="ConfirmTitle" Text="Подтверждение" FontSize="20"
                                FontWeight="SemiBold"/>
                     <TextBlock x:Name="ConfirmDescription" Grid.Row="1" TextWrapping="Wrap"
                                Foreground="{StaticResource MutedBrush}" FontSize="13"

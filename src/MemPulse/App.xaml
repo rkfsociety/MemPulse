@@ -3,20 +3,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <SolidColorBrush x:Key="WindowBrush" Color="#09121D"/>
-        <SolidColorBrush x:Key="SelectedNavBrush" Color="#17413F"/>
+        <SolidColorBrush x:Key="WindowBrush" Color="#0A121C"/>
+        <SolidColorBrush x:Key="SelectedNavBrush" Color="#153B3C"/>
         <SolidColorBrush x:Key="TransparentNavBrush" Color="Transparent"/>
-        <SolidColorBrush x:Key="PanelBrush" Color="#11202C"/>
-        <SolidColorBrush x:Key="RaisedBrush" Color="#254454"/>
-        <SolidColorBrush x:Key="BorderBrushApp" Color="#294552"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#30E2C1"/>
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="#8BF8DE"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#F3FAFC"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#101F2B"/>
+        <SolidColorBrush x:Key="RaisedBrush" Color="#203C4B"/>
+        <SolidColorBrush x:Key="BorderBrushApp" Color="#294653"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#35E0C2"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#91F6E3"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#EEF7FA"/>
         <SolidColorBrush x:Key="ButtonTextBrush" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="PrimaryTextBrush" Color="#092E32"/>
-        <SolidColorBrush x:Key="DisabledBrush" Color="#304652"/>
-        <SolidColorBrush x:Key="DisabledTextBrush" Color="#AEC2CB"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#99B1BE"/>
+        <SolidColorBrush x:Key="DisabledBrush" Color="#2F4652"/>
+        <SolidColorBrush x:Key="DisabledTextBrush" Color="#ABC1CB"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#A3B9C6"/>
         <SolidColorBrush x:Key="TrackBrush" Color="#274451"/>
         <Style TargetType="Window">
             <Setter Property="Background" Value="{StaticResource WindowBrush}"/>
@@ -36,7 +36,7 @@
         <Style x:Key="ActionButton" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource RaisedBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource ButtonTextBrush}"/>
-            <Setter Property="BorderBrush" Value="#375665"/>
+            <Setter Property="BorderBrush" Value="#365562"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -51,7 +51,7 @@
                         <Border x:Name="Surface"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}"
+                                CornerRadius="10" Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -84,7 +84,7 @@
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
             <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
-            <Setter Property="BorderBrush" Value="#68F5DD"/>
+            <Setter Property="BorderBrush" Value="#73F5DE"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="MinHeight" Value="42"/>
         </Style>
@@ -104,13 +104,31 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7" Background="{TemplateBinding Background}">
+                        <Border x:Name="InputSurface" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9" Background="{TemplateBinding Background}">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="InputSurface" Property="BorderBrush" Value="#4B7480"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="InputSurface" Property="BorderBrush"
+                                        Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="{StaticResource RaisedBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushApp}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,7"/>
         </Style>
         <!-- Crisp, themed checkboxes instead of stock white Windows controls. -->
         <Style TargetType="CheckBox">
@@ -127,7 +145,7 @@
                                 <ColumnDefinition Width="23"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="TickBox" Width="17" Height="17" CornerRadius="4"
+                            <Border x:Name="TickBox" Width="17" Height="17" CornerRadius="5"
                                     Background="#162B37" BorderBrush="#50717D" BorderThickness="1"
                                     HorizontalAlignment="Left" VerticalAlignment="Center">
                                 <Path x:Name="Tick" Data="M 3,8 L 6.5,11 L 13,4"
@@ -249,7 +267,7 @@
             <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="RowBackground" Value="{StaticResource PanelBrush}"/>
-            <Setter Property="AlternatingRowBackground" Value="#152A36"/>
+            <Setter Property="AlternatingRowBackground" Value="#142935"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="GridLinesVisibility" Value="None"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
@@ -266,11 +284,11 @@
             <Setter Property="IsReadOnly" Value="True"/>
         </Style>
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="{StaticResource RaisedBrush}"/>
+            <Setter Property="Background" Value="#1A3442"/>
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Padding" Value="13,0"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
@@ -278,7 +296,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="11,0"/>
+            <Setter Property="Padding" Value="13,0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <!-- Override the Windows theme's white selection background. -->
@@ -296,7 +314,7 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#204751"/>
+                    <Setter Property="Background" Value="#21525A"/>
                     <Setter Property="Foreground" Value="#FFFFFF"/>
                 </Trigger>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -323,10 +341,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
                         <Grid ClipToBounds="True">
-                            <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="5"/>
                             <Border x:Name="PART_Track" Background="Transparent"/>
                             <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
-                                    CornerRadius="4" HorizontalAlignment="Left"/>
+                                    CornerRadius="5" HorizontalAlignment="Left"/>
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>

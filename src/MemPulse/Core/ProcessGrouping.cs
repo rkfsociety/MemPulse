@@ -22,6 +22,19 @@ public sealed record ProcessGroupUsage(
 
 public static class ProcessGrouping
 {
+    // A corrupted or unusually large snapshot must not crash the UI with a long overflow.
+    private static long SaturatingSum(IEnumerable<long> values)
+    {
+        long sum = 0;
+        foreach (long value in values)
+        {
+            if (value <= 0) continue;
+            if (sum > long.MaxValue - value) return long.MaxValue;
+            sum += value;
+        }
+        return sum;
+    }
+
     public static IReadOnlyList<ProcessGroupUsage> Build(IEnumerable<ProcessUsage> processes)
     {
         var grouped = processes
@@ -29,8 +42,8 @@ public static class ProcessGrouping
             .Select(g =>
             {
                 var members = g.OrderByDescending(p => p.WorkingBytes).ToArray();
-                long working = members.Sum(p => Math.Max(0, p.WorkingBytes));
-                long privateBytes = members.Sum(p => Math.Max(0, p.PrivateBytes));
+                long working = SaturatingSum(members.Select(p => p.WorkingBytes));
+                long privateBytes = SaturatingSum(members.Select(p => p.PrivateBytes));
                 return new ProcessGroupUsage(
                     members[0].Name, members, working, privateBytes,
                     members.Select(p => p.IconBytes).FirstOrDefault(icon => icon is { Length: > 0 }),

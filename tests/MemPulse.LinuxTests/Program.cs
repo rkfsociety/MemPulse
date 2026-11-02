@@ -34,7 +34,7 @@ Assert(p.Pid == 123 && p.Name == "my process" &&
 var groups = ProcessGrouping.Build([p, p with { Pid = 234 }]);
 Assert(groups.Count == 1 && groups[0].Count == 2, "group Linux processes");
 
-string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 19)) + " 123456 0 0";
+string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 18)) + " 123456 0 0";
 Assert(LinuxProcfs.TryParseStartTicks(stat, out var ticks) && ticks == 123456, "stat parsing with spaces and brackets");
 Assert(!LinuxProcfs.TryParseStartTicks("broken", out _), "reject invalid proc stat");
 var now = DateTimeOffset.UtcNow;

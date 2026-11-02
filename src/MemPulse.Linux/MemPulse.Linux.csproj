@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MemPulse.Linux</AssemblyName>
+    <Version>0.2.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.13" />
+    <Compile Include="../MemPulse/Core/Models.cs" Link="Core/Models.cs" />
+    <Compile Include="../MemPulse/Core/ProcessGrouping.cs" Link="Core/ProcessGrouping.cs" />
+  </ItemGroup>
+</Project>

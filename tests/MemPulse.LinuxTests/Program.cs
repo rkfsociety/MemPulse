@@ -45,6 +45,14 @@ Assert(many.Count == 250 && ProcessGrouping.Filter(many, "app").Count == 250,
 string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 18)) + " 123456 0 0";
 Assert(LinuxProcfs.TryParseStartTicks(stat, out var ticks) && ticks == 123456, "stat parsing with spaces and brackets");
 Assert(!LinuxProcfs.TryParseStartTicks("broken", out _), "reject invalid proc stat");
+Assert(LinuxProcfs.TryParseStartTicks(stat.Replace(" S ", "\tS\t"), out var tabTicks) &&
+       tabTicks == 123456, "stat parser accepts whitespace-separated fields");
+var tabMem = LinuxProcfs.ParseMemInfo("MemTotal:\t100\tkB\nMemAvailable:\t40\tkB");
+Assert(tabMem.Total == 100UL * 1024 && tabMem.Available == 40UL * 1024,
+    "meminfo parser accepts tab-separated values and units");
+var tabProcess = LinuxProcfs.ParseProcessStatus(42, "Name:\ttabbed\nVmRSS:\t8\tkB\nVmData:\t4\tkB");
+Assert(tabProcess.WorkingBytes == 8192 && tabProcess.PrivateBytes == 4096,
+    "process status parser accepts tab-separated values and units");
 var now = DateTimeOffset.UtcNow;
 Assert(LinuxAutoCleanupPolicy.ShouldClean(91, 90, now, DateTimeOffset.MinValue), "above threshold triggers auto cleanup");
 Assert(!LinuxAutoCleanupPolicy.ShouldClean(89, 90, now, DateTimeOffset.MinValue), "below threshold does not trigger");

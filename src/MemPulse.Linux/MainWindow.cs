@@ -98,10 +98,14 @@ public sealed class MainWindow : Window
         MinHeight = 600;
         Background = Canvas;
 
-        var layout = new DockPanel { Margin = new Thickness(20) };
-        Content = layout;
+        // Scroll the dashboard as one surface, keeping operation status visible
+        // while navigating a long process list or using high display scaling.
+        var shell = new DockPanel();
+        Content = shell;
+        var layout = new StackPanel { Spacing = 11, Margin = new Thickness(20) };
+        _processScroll.Content = layout;
+        shell.Children.Add(_processScroll);
         var header = new StackPanel { Spacing = 11 };
-        DockPanel.SetDock(header, Dock.Top);
         layout.Children.Add(header);
 
         var titleLine = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -238,22 +242,23 @@ public sealed class MainWindow : Window
         };
         header.Children.Add(processHeading);
 
-        var footer = new StackPanel { Spacing = 5, Margin = new Thickness(0, 12, 0, 0) };
-        DockPanel.SetDock(footer, Dock.Bottom);
+        var footer = new StackPanel { Spacing = 5, Margin = new Thickness(20, 8, 20, 16) };
         footer.Children.Add(new TextBlock
         {
             Text = "RSS — физическая память · Data — виртуальная память · Очистка PID не гарантирует уменьшение RSS",
             Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap
         });
         footer.Children.Add(_status);
-        layout.Children.Add(footer);
-        _processScroll.Content = _rows;
         layout.Children.Add(new Border
         {
             Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(9), Child = _processScroll
+            Padding = new Thickness(9), Child = _rows
         });
+        // DockPanel processes children in order: status stays pinned below
+        // the scrolling dashboard, even when hundreds of processes are listed.
+        DockPanel.SetDock(footer, Dock.Bottom);
+        shell.Children.Insert(0, footer);
 
         _timer.Tick += (_, _) => Refresh();
         Closed += (_, _) =>
@@ -270,6 +275,15 @@ public sealed class MainWindow : Window
             !Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
             Dispatcher.UIThread.Post(async () => await ApplyAutoSettingsAsync(), DispatcherPriority.Background);
     }
+
+    // The Linux graphical smoke test verifies the scrollable dashboard and
+    // permanently visible status footer both remain part of the window.
+    internal bool VerifyScrollableLayoutForSmokeTest() =>
+        Content is DockPanel shell &&
+        shell.Children.Contains(_processScroll) &&
+        _processScroll.Content is StackPanel dashboard &&
+        dashboard.Children.OfType<Border>().Any(card => ReferenceEquals(card.Child, _rows)) &&
+        shell.Children.OfType<StackPanel>().Any(section => section.Children.Contains(_status));
 
     private static TextBlock Metric() =>
         new() { FontSize = 18, FontWeight = FontWeight.SemiBold, Foreground = Text };
@@ -376,7 +390,7 @@ public sealed class MainWindow : Window
             _processCount.Text += $" · показано {visible}";
 
         // Refreshing live process numbers must not throw the reader back to the top.
-        var previousOffset = resetScroll ? new Vector(0, 0) : _processScroll.Offset;
+        var previousOffset = _processScroll.Offset;
         foreach (var old in _rows.Children.OfType<Expander>())
         {
             if (old.Tag is not string name) continue;
@@ -391,13 +405,7 @@ public sealed class MainWindow : Window
             {
                 Tag = group.Name,
                 IsExpanded = expanded,
-                Header = new TextBlock
-                {
-                    Text = group.DisplayName + "  ·  RSS " + group.WorkingText +
-                        "  ·  Data " + group.PrivateText,
-                    Foreground = Text,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                }
+                Header = CreateGroupHeader(group)
             };
             // Build PID rows only for open groups. Large process lists no longer
             // allocate hundreds of invisible buttons every two seconds.
@@ -439,7 +447,41 @@ public sealed class MainWindow : Window
                 Text = "Процессы не найдены.", Foreground = Muted,
                 Margin = new Thickness(12)
             });
-        Dispatcher.UIThread.Post(() => _processScroll.Offset = previousOffset, DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(() =>
+        {
+            // Filtering should reveal the search field and results, not jump to
+            // the top of the memory dashboard. Live refresh keeps its position.
+            if (resetScroll) _filter.BringIntoView();
+            else _processScroll.Offset = previousOffset;
+        }, DispatcherPriority.Loaded);
+    }
+
+    private static Grid CreateGroupHeader(ProcessGroupUsage group)
+    {
+        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+        heading.Children.Add(new TextBlock
+        {
+            Text = group.DisplayName, Foreground = Text,
+            FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var rss = new TextBlock
+        {
+            Text = "RSS  " + group.WorkingText, Foreground = Highlight,
+            FontSize = 12, Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(rss, 1);
+        heading.Children.Add(rss);
+        var data = new TextBlock
+        {
+            Text = "Data  " + group.PrivateText, Foreground = Muted,
+            FontSize = 12, Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(data, 2);
+        heading.Children.Add(data);
+        return heading;
     }
 
     private StackPanel CreateProcessDetails(ProcessGroupUsage group)

@@ -47,9 +47,14 @@ internal sealed class LinuxApp : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            var window = new MainWindow();
+            desktop.MainWindow = window;
             if (Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
+            {
+                if (!window.VerifyScrollableLayoutForSmokeTest())
+                    throw new InvalidOperationException("Linux dashboard must scroll as a single surface.");
                 Dispatcher.UIThread.Post(() => desktop.Shutdown(0), DispatcherPriority.Background);
+            }
         }
         base.OnFrameworkInitializationCompleted();
     }

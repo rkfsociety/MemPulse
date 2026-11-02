@@ -48,7 +48,7 @@ public sealed class LinuxProcfs
         ticks = 0;
         int delimiter = stat.LastIndexOf(')');
         if (delimiter < 0 || delimiter + 1 >= stat.Length) return false;
-        string[] tail = stat[(delimiter + 1)..].Split(' ',
+        string[] tail = stat[(delimiter + 1)..].Split((char[]?)null,
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return tail.Length >= 20 &&
             ulong.TryParse(tail[19], NumberStyles.None, CultureInfo.InvariantCulture, out ticks) &&
@@ -114,7 +114,8 @@ public sealed class LinuxProcfs
     private static bool TryParseKilobytes(string value, out ulong bytes)
     {
         bytes = 0;
-        var fields = value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var fields = value.Trim().Split((char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (fields.Length == 0 ||
             !ulong.TryParse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture, out var number))
             return false;

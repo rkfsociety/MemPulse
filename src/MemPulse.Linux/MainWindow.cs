@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -47,6 +48,11 @@ public sealed class MainWindow : Window
         Minimum = 5, Maximum = 120, Increment = 1, Value = 15, FormatString = "0", Width = 72
     };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _filterDebounce = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private const int ProcessPageSize = 100;
+    private int _visibleGroupLimit = ProcessPageSize;
+    private bool _refreshing;
+    private bool _closed;
     private IReadOnlyList<ProcessGroupUsage> _groups = [];
     private readonly HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     private string _operationStatus = "Мониторинг работает без прав администратора.";
@@ -64,6 +70,26 @@ public sealed class MainWindow : Window
         _filter.BorderBrush = Stroke;
         _filter.BorderThickness = new Thickness(1);
         _filter.Padding = new Thickness(11, 8);
+        ToolTip.SetTip(_filter, "Ctrl+F — поиск · Esc — очистить поиск");
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.F && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                _filter.Focus();
+                _filter.SelectAll();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && _filter.IsFocused && !string.IsNullOrEmpty(_filter.Text))
+            {
+                _filter.Clear();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F5)
+            {
+                Refresh();
+                e.Handled = true;
+            }
+        };
 
         Title = "MemPulse — Linux";
         Width = 1020;
@@ -103,6 +129,9 @@ public sealed class MainWindow : Window
         AddMetric(metrics, 1, "Доступно", _available);
         AddMetric(metrics, 2, "Кэш (reclaimable)", _cache);
         AddMetric(metrics, 3, "Всего", _total);
+        // Four cards on wide screens, two readable rows on compact windows.
+        UpdateMetricColumns(metrics, Width < 920 ? 2 : 4);
+        SizeChanged += (_, e) => UpdateMetricColumns(metrics, e.NewSize.Width < 920 ? 2 : 4);
         var overview = new StackPanel { Spacing = 13 };
         var memoryHeading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         memoryHeading.Children.Add(new StackPanel
@@ -156,12 +185,16 @@ public sealed class MainWindow : Window
         {
             Text = "Автоочистка файлового кэша", FontSize = 16, FontWeight = FontWeight.SemiBold
         });
-        var controls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12,
+        var controls = new WrapPanel { Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center };
+        _autoBox.Margin = new Thickness(0, 0, 12, 8);
+        _threshold.Margin = new Thickness(0, 0, 12, 8);
+        _cooldown.Margin = new Thickness(0, 0, 12, 8);
+        _applyButton.Margin = new Thickness(0, 0, 0, 8);
         controls.Children.Add(_autoBox);
-        controls.Children.Add(new TextBlock { Text = "Порог, %", VerticalAlignment = VerticalAlignment.Center });
+        controls.Children.Add(new TextBlock { Text = "Порог, %", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
         controls.Children.Add(_threshold);
-        controls.Children.Add(new TextBlock { Text = "Пауза, мин.", VerticalAlignment = VerticalAlignment.Center });
+        controls.Children.Add(new TextBlock { Text = "Пауза, мин.", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
         controls.Children.Add(_cooldown);
         _applyButton.Click += async (_, _) => await ApplyAutoSettingsAsync();
         controls.Children.Add(_applyButton);
@@ -192,7 +225,17 @@ public sealed class MainWindow : Window
         });
         Grid.SetColumn(_filter, 1);
         processHeading.Children.Add(_filter);
-        _filter.TextChanged += (_, _) => RenderProcesses(resetScroll: true);
+        _filterDebounce.Tick += (_, _) =>
+        {
+            _filterDebounce.Stop();
+            _visibleGroupLimit = ProcessPageSize;
+            RenderProcesses(resetScroll: true);
+        };
+        _filter.TextChanged += (_, _) =>
+        {
+            _filterDebounce.Stop();
+            _filterDebounce.Start();
+        };
         header.Children.Add(processHeading);
 
         var footer = new StackPanel { Spacing = 5, Margin = new Thickness(0, 12, 0, 0) };
@@ -215,7 +258,9 @@ public sealed class MainWindow : Window
         _timer.Tick += (_, _) => Refresh();
         Closed += (_, _) =>
         {
+            _closed = true;
             _timer.Stop();
+            _filterDebounce.Stop();
             _autoSession?.Dispose();
         };
         Refresh();
@@ -240,6 +285,21 @@ public sealed class MainWindow : Window
         button.FontWeight = FontWeight.SemiBold;
     }
 
+    private static void UpdateMetricColumns(Grid metrics, int columns)
+    {
+        metrics.ColumnDefinitions = new ColumnDefinitions(columns == 2 ? "*,*" : "*,*,*,*");
+        metrics.RowDefinitions = new RowDefinitions(columns == 2 ? "Auto,Auto" : "Auto");
+        for (int index = 0; index < metrics.Children.Count; index++)
+        {
+            var card = metrics.Children[index];
+            Grid.SetColumn(card, index % columns);
+            Grid.SetRow(card, index / columns);
+            if (card is Border border)
+                border.Margin = new Thickness(0, 0, index % columns == columns - 1 ? 0 : 9,
+                    columns == 2 && index < 2 ? 9 : 0);
+        }
+    }
+
     private static void AddMetric(Grid grid, int column, string caption, TextBlock value)
     {
         var stack = new StackPanel { Spacing = 5 };
@@ -257,20 +317,35 @@ public sealed class MainWindow : Window
 
     private void Refresh()
     {
+        if (!_refreshing && !_closed)
+            _ = RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _refreshing = true;
         try
         {
-            var memory = _procfs.ReadMemory();
-            _usageBar.Value = memory.UsedPercent;
-            _usagePercent.Text = $"{memory.UsedPercent:0.0}%";
-            _used.Text = Format.Bytes(memory.Used);
-            _available.Text = Format.Bytes(memory.Available);
-            _cache.Text = Format.Bytes(memory.Cache);
-            _total.Text = Format.Bytes(memory.Total);
+            // /proc enumeration and grouping can be expensive on busy systems.
+            // Keep the Avalonia UI thread free for typing, scrolling and window resizing.
+            var snapshot = await Task.Run(() =>
+            {
+                var memory = _procfs.ReadMemory();
+                var processes = _procfs.ReadProcesses();
+                return (memory, groups: ProcessGrouping.Build(processes), total: processes.Count);
+            });
+            if (_closed) return;
 
-            var processes = _procfs.ReadProcesses();
-            _groups = ProcessGrouping.Build(processes);
-            _processTotal = processes.Count;
+            _usageBar.Value = snapshot.memory.UsedPercent;
+            _usagePercent.Text = $"{snapshot.memory.UsedPercent:0.0}%";
+            _used.Text = Format.Bytes(snapshot.memory.Used);
+            _available.Text = Format.Bytes(snapshot.memory.Available);
+            _cache.Text = Format.Bytes(snapshot.memory.Cache);
+            _total.Text = Format.Bytes(snapshot.memory.Total);
+            _groups = snapshot.groups;
+            _processTotal = snapshot.total;
             RenderProcesses();
+
             if (_autoSession is { Running: false })
             {
                 _autoSession.Dispose();
@@ -284,8 +359,9 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            _status.Text = "Ошибка мониторинга: " + ex.Message;
+            if (!_closed) _status.Text = "Ошибка мониторинга: " + ex.Message;
         }
+        finally { _refreshing = false; }
     }
 
     private void RenderProcesses(bool resetScroll = false)
@@ -295,8 +371,9 @@ public sealed class MainWindow : Window
         _processCount.Text = query.Length == 0
             ? $"{_groups.Count} приложений · {_processTotal} процессов"
             : $"Найдено {matches.Count} из {_groups.Count} приложений";
-        if (matches.Count > 100)
-            _processCount.Text += " · показаны первые 100";
+        int visible = Math.Min(matches.Count, _visibleGroupLimit);
+        if (matches.Count > visible)
+            _processCount.Text += $" · показано {visible}";
 
         // Refreshing live process numbers must not throw the reader back to the top.
         var previousOffset = resetScroll ? new Vector(0, 0) : _processScroll.Offset;
@@ -307,7 +384,7 @@ public sealed class MainWindow : Window
             else _expandedGroups.Remove(name);
         }
         _rows.Children.Clear();
-        foreach (var group in matches.Take(100))
+        foreach (var group in matches.Take(visible))
         {
             bool expanded = _expandedGroups.Contains(group.Name);
             var expander = new Expander
@@ -338,6 +415,23 @@ public sealed class MainWindow : Window
                 expander.Content = null;
             };
             _rows.Children.Add(expander);
+        }
+        if (matches.Count > visible)
+        {
+            int nextCount = Math.Min(ProcessPageSize, matches.Count - visible);
+            var more = new Button
+            {
+                Content = $"Показать ещё {nextCount} приложений",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(12)
+            };
+            StyleAction(more);
+            more.Click += (_, _) =>
+            {
+                _visibleGroupLimit += ProcessPageSize;
+                RenderProcesses();
+            };
+            _rows.Children.Add(more);
         }
         if (_rows.Children.Count == 0)
             _rows.Children.Add(new TextBlock

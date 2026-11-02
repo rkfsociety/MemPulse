@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Threading;
 using MemPulse.Core;
 using Forms = System.Windows.Forms;
@@ -57,6 +58,30 @@ public partial class MainWindow : Window
         ActivateSection(Section.Overview);
         _timer.Tick += async (_, _) => await RefreshAsync();
         _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
+        PreviewKeyDown += (_, e) =>
+        {
+            if (_confirmation is not null) return;
+            if (e.Key == Key.F && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                ActivateSection(Section.Processes);
+                GroupSearchBox.Focus();
+                GroupSearchBox.SelectAll();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape &&
+                     Keyboard.FocusedElement is TextBox search &&
+                     (ReferenceEquals(search, SearchBox) || ReferenceEquals(search, GroupSearchBox)) &&
+                     !string.IsNullOrEmpty(search.Text))
+            {
+                search.Clear();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F5)
+            {
+                _ = RefreshAsync();
+                e.Handled = true;
+            }
+        };
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)

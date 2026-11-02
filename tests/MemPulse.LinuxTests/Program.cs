@@ -37,6 +37,10 @@ Assert(ReferenceEquals(ProcessGrouping.Filter(groups, ""), groups), "empty proce
 Assert(ProcessGrouping.Filter(groups, " MY PROCESS ").Count == 1, "process search ignores case and outer whitespace");
 Assert(ProcessGrouping.Filter(groups, "234").Count == 1, "process search finds a member PID");
 Assert(ProcessGrouping.Filter(groups, "999").Count == 0, "process search rejects unknown PIDs");
+var many = ProcessGrouping.Build(Enumerable.Range(1, 250)
+    .Select(i => new ProcessUsage(i, $"app{i:D3}", i * 1024L, 0)));
+Assert(many.Count == 250 && ProcessGrouping.Filter(many, "app").Count == 250,
+    "large process lists remain complete for progressive paging");
 
 string stat = "111 (my proc (test)) S " + string.Join(' ', Enumerable.Repeat("0", 18)) + " 123456 0 0";
 Assert(LinuxProcfs.TryParseStartTicks(stat, out var ticks) && ticks == 123456, "stat parsing with spaces and brackets");

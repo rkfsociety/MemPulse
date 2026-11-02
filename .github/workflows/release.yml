@@ -133,11 +133,22 @@ jobs:
         shell: pwsh
         run: ./scripts/build-installer.ps1 -Version $env:APP_VERSION
 
+      - name: Publish Linux x64 and arm64
+        if: steps.version.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          foreach ($rid in @('linux-x64', 'linux-arm64')) {
+            dotnet publish src/MemPulse.Linux/MemPulse.Linux.csproj --configuration Release --runtime $rid --self-contained true -p:Version=$env:APP_VERSION -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output "publish-$rid"
+            if ($LASTEXITCODE -ne 0) { throw "Linux publish failed: $rid" }
+            tar -czf "dist/MemPulse-$rid.tar.gz" -C "publish-$rid" .
+            if ($LASTEXITCODE -ne 0) { throw "Linux archive failed: $rid" }
+          }
+
       - name: Generate SHA-256 checksums
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
         run: |
-          $paths = @('publish/MemPulse.exe', 'dist/MemPulse-Setup-x64.exe')
+          $paths = @('publish/MemPulse.exe', 'dist/MemPulse-Setup-x64.exe', 'dist/MemPulse-linux-x64.tar.gz', 'dist/MemPulse-linux-arm64.tar.gz')
           $lines = foreach ($path in $paths) {
             $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $([IO.Path]::GetFileName($path))"
@@ -154,6 +165,8 @@ jobs:
           # It then publishes the same commit and attaches verified build artifacts.
           gh release create $env:TAG `
             "dist/MemPulse-Setup-x64.exe" `
+            "dist/MemPulse-linux-x64.tar.gz" `
+            "dist/MemPulse-linux-arm64.tar.gz" `
             "publish/MemPulse.exe" `
             "dist/SHA256SUMS.txt" `
             --repo $env:GITHUB_REPOSITORY `
@@ -179,7 +192,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $published.isDraft -or $published.tagName -cne $tag) {
             throw 'New release is not published; refusing cleanup.'
           }
-          foreach ($asset in @('MemPulse.exe', 'MemPulse-Setup-x64.exe', 'SHA256SUMS.txt')) {
+          foreach ($asset in @('MemPulse.exe', 'MemPulse-Setup-x64.exe', 'MemPulse-linux-x64.tar.gz', 'MemPulse-linux-arm64.tar.gz', 'SHA256SUMS.txt')) {
             if ($asset -cnotin @($published.assets | ForEach-Object { $_.name })) {
               throw "Missing release asset $asset; refusing cleanup."
             }

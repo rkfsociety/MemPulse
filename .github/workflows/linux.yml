@@ -1,0 +1,35 @@
+name: Linux build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build Linux desktop app
+        run: dotnet build src/MemPulse.Linux/MemPulse.Linux.csproj -c Release --warnaserror
+      - name: Run Linux procfs smoke tests
+        run: dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Release
+      - name: Publish portable Linux builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for rid in linux-x64 linux-arm64; do
+            dotnet publish src/MemPulse.Linux/MemPulse.Linux.csproj -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "publish/$rid"
+            chmod +x "publish/$rid/MemPulse.Linux"
+            tar -czf "dist/MemPulse-$rid.tar.gz" -C "publish/$rid" .
+          done
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemPulse-Linux
+          path: dist/MemPulse-linux-*.tar.gz

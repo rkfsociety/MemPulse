@@ -40,17 +40,10 @@ jobs:
             throw "Packaged startup succeeded but no startup success marker was recorded."
           }
           Write-Host "PASS: Packaged MemPulse starts, initializes WPF and writes startup diagnostics."
-      - name: Build per-user installer
-        shell: pwsh
-        run: |
-          # Скрипт сам читает версию из Directory.Build.props
-          ./scripts/build-installer.ps1
+
+
           
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: MemPulse-Setup-x64
-          path: dist/MemPulse-Setup-x64.exe
+
       - name: Upload portable app
         uses: actions/upload-artifact@v4
         with:

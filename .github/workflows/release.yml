@@ -51,7 +51,7 @@ jobs:
             $oldVersion = [string]$previousProject.Project.PropertyGroup.Version
             if ($oldVersion -eq $version) {
               Write-Host "Version unchanged ($version). No tag or release will be created."
-              "publish=false" >> $env:GITHUB_OUTPUT
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "publish=false"
               exit 0
             }
             if ($oldVersion -notmatch $versionPattern) {
@@ -86,12 +86,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-        - name: Restore dependencies
-          if: steps.version.outputs.publish == 'true'
-          shell: pwsh
-          run: dotnet restore src/MemPulse/MemPulse.csproj
-
-        - name: Build
 
       - name: Build
         if: steps.version.outputs.publish == 'true'

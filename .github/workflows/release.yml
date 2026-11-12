@@ -32,8 +32,8 @@ jobs:
           BEFORE_COMMIT: ${{ github.event.before }}
         run: |
           $ErrorActionPreference = 'Stop'
-          [xml]$project = Get-Content 'src/MemPulse/MemPulse.csproj' -Raw
-          $version = [string]$project.Project.PropertyGroup.Version
+          [xml]$project = Get-Content 'src/Directory.Build.props' -Raw
+          $version = $project.SelectSingleNode('//Version').InnerText
           $versionPattern = '^((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))$'
           if ($version -cnotmatch $versionPattern) {
             throw "Project version must be MAJOR.MINOR.PATCH (without a v prefix): $version"
@@ -44,11 +44,11 @@ jobs:
             if ([string]::IsNullOrEmpty($before) -or $before -match '^0{40}$') {
               throw 'Previous main commit was not provided; cannot verify a version change.'
             }
-            $previousSpec = "$($before):src/MemPulse/MemPulse.csproj"
+            $previousSpec = "$($before):src/Directory.Build.props"
             $previousText = @(git show $previousSpec) -join "`n"
             if ($LASTEXITCODE -ne 0) { throw "Cannot read previous project from $before" }
             [xml]$previousProject = $previousText
-            $oldVersion = [string]$previousProject.Project.PropertyGroup.Version
+            $oldVersion = $previousProject.SelectSingleNode('//Version').InnerText
             if ($oldVersion -eq $version) {
               Write-Host "Version unchanged ($version). No tag or release will be created."
               Add-Content -Path $env:GITHUB_OUTPUT -Value "publish=false"

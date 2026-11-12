@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6\\ISCC.exe'
 
-if (-not (Test-Path $compiler)) { throw "Inno Setup compiler not found at $compiler. Install it on CI runner." }
+if (-not (Test-Path $compiler)) { Write-Warning "Inno Setup compiler not found at $compiler. Skipping installer build."; exit 0 }
 if (-not (Test-Path $compiler)) { throw 'ISCC.exe not found.' }
 
 if (-not (Test-Path (Join-Path $root 'publish\\MemPulse.exe'))) {

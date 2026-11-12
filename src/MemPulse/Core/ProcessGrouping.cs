@@ -50,16 +50,10 @@ public static class ProcessGrouping
         };
 
     // A corrupted or unusually large snapshot must not crash the UI with a long overflow.
-    private static long SaturatingSum(IEnumerable<long> values)
+    private static long SaturatingAdd(long sum, long value)
     {
-        long sum = 0;
-        foreach (long value in values)
-        {
-            if (value <= 0) continue;
-            if (sum > long.MaxValue - value) return long.MaxValue;
-            sum += value;
-        }
-        return sum;
+        if (value <= 0) return sum;
+        return sum > long.MaxValue - value ? long.MaxValue : sum + value;
     }
 
     /// <summary>Search grouped processes by application name or decimal PID.</summary>
@@ -82,20 +76,33 @@ public static class ProcessGrouping
             .Select(g =>
             {
                 var members = g.OrderByDescending(p => p.WorkingBytes).ToArray();
-                long working = SaturatingSum(members.Select(p => p.WorkingBytes));
-                long privateBytes = SaturatingSum(members.Select(p => p.PrivateBytes));
+                long working = 0;
+                long privateBytes = 0;
+                byte[]? icon = null;
+                foreach (var member in members)
+                {
+                    working = SaturatingAdd(working, member.WorkingBytes);
+                    privateBytes = SaturatingAdd(privateBytes, member.PrivateBytes);
+                    if (icon is null && member.IconBytes is { Length: > 0 })
+                        icon = member.IconBytes;
+                }
                 return new ProcessGroupUsage(
-                    members[0].Name, members, working, privateBytes,
-                    members.Select(p => p.IconBytes).FirstOrDefault(icon => icon is { Length: > 0 }),
-                    0);
+                    members[0].Name, members, working, privateBytes, icon, 0);
             })
             .OrderByDescending(g => g.WorkingBytes)
             .ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        long largest = Math.Max(1L, grouped.Length == 0 ? 0 : grouped[0].WorkingBytes);
-        return grouped.Select(g => g with
-            { RelativeLoad = Math.Clamp((double)g.WorkingBytes / largest * 100, 0, 100) })
-            .ToArray();
+        if (grouped.Length == 0) return grouped;
+
+        long largest = Math.Max(1L, grouped[0].WorkingBytes);
+        for (int i = 0; i < grouped.Length; i++)
+        {
+            grouped[i] = grouped[i] with
+            {
+                RelativeLoad = Math.Clamp((double)grouped[i].WorkingBytes / largest * 100, 0, 100)
+            };
+        }
+        return grouped;
     }
 }

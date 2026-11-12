@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/MemPulse/MemPulse.csproj'
+      - 'src/Directory.Build.props'
   workflow_dispatch:
 
 permissions:
@@ -137,7 +137,7 @@ jobs:
       - name: Build per-user installer
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
-        run: ./scripts/build-installer.ps1 -Version $env:APP_VERSION
+        run: ./scripts/build-installer.ps1
 
       - name: Publish Linux x64 and arm64
         if: steps.version.outputs.publish == 'true'

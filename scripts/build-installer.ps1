@@ -1,6 +1,11 @@
 param(
-    [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version
+    [string]$Version = (Get-Content (Join-Path $PSScriptRoot '..\\src\\Directory.Build.props') |
+        Select-String -Pattern '<Version>(.+)</Version>' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value })
 )
+if (-not $Version -or $Version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Invalid or missing version. Expected format X.Y.Z"
+}
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6\ISCC.exe'

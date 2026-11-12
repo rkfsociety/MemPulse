@@ -1,10 +1,10 @@
 ﻿## Build installer for MemPulse
 # Читаем версию из Directory.Build.props (единственный источник)
-[xml]$props = Get-Content (Join-Path $PSScriptRoot '..\\src\\Directory.Build.props')
-$Version = $props.Project.PropertyGroup.Version.Trim()
+[xml]$props = Get-Content (Resolve-Path "$PSScriptRoot\..\src\Directory.Build.props") -Raw
+$Version = $props.SelectSingleNode('//Version').InnerText.Trim()
 Write-Host "Version extracted: [$Version]"
 
-if (-not $Version -or $Version -notmatch '^\\d+\\.\\d+\\.\\d+$') {
+if (-not $Version -or $Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Invalid or missing version. Expected format X.Y.Z"
 }
 

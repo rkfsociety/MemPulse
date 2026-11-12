@@ -144,7 +144,7 @@ public sealed class UpdateService
     }
 
     // Download installer with progress throttling and backup
-    public async Task DownloadAsync(AvailableUpdate update, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<string> DownloadAsync(AvailableUpdate update, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!IsExpectedAssetUrl(update.InstallerUrl, update.Tag) || update.Sha256.Length != 32)
             throw new InvalidDataException("Некорректные сведения об обновлении.");
@@ -202,6 +202,9 @@ public sealed class UpdateService
             }
 
             await output.FlushAsync(cancellationToken);
+            await output.DisposeAsync();
+            if (!CryptographicOperations.FixedTimeEquals(sha.GetHashAndReset(), update.Sha256))
+                throw new InvalidDataException("Контрольная сумма обновления не совпадает.");
             progress?.Report(100);
 
             // Backup old installer if it exists
@@ -211,6 +214,7 @@ public sealed class UpdateService
                 File.Copy(destination, backup, true);
             }
             File.Move(staging, destination, true);
+            return destination;
         }
         finally
         {

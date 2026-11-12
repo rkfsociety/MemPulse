@@ -6,13 +6,15 @@ namespace MemPulse.Core;
 
 public sealed class MonitoringService
 {
+    private static readonly uint MEMORYSTATUSEX_SIZE = (uint)Marshal.SizeOf<Native.MEMORYSTATUSEX>();
+    private static readonly uint PERFORMANCE_INFORMATION_SIZE = (uint)Marshal.SizeOf<Native.PERFORMANCE_INFORMATION>();
     public MemoryUsage ReadMemory()
     {
-        var status = new Native.MEMORYSTATUSEX { Length = (uint)Marshal.SizeOf<Native.MEMORYSTATUSEX>() };
+        var status = new Native.MEMORYSTATUSEX { Length = MEMORYSTATUSEX_SIZE };
         if (!Native.GlobalMemoryStatusEx(ref status))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Не удалось получить сведения об оперативной памяти.");
         ulong cache = 0, committed = 0, commitLimit = 0;
-        if (Native.GetPerformanceInfo(out var info, (uint)Marshal.SizeOf<Native.PERFORMANCE_INFORMATION>()))
+        if (Native.GetPerformanceInfo(out var info, PERFORMANCE_INFORMATION_SIZE))
         {
             cache = (ulong)info.SystemCache * (ulong)info.PageSize;
             committed = (ulong)info.CommitTotal * (ulong)info.PageSize;
@@ -42,6 +44,12 @@ public sealed class MonitoringService
                 }
             }
         }
-        return rows.OrderByDescending(row => row.WorkingBytes).ThenBy(row => row.Name).ToArray();
+        rows.Sort((a, b) =>
+            {
+                int cmp = b.WorkingBytes.CompareTo(a.WorkingBytes);
+                if (cmp != 0) return cmp;
+                return string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+            });
+            return rows;
     }
 }

@@ -2,6 +2,8 @@ using System.IO;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MemPulse.Core;
 
@@ -16,7 +18,22 @@ public sealed class ProcessIconCache
     public IReadOnlyList<ProcessUsage> Decorate(IReadOnlyList<ProcessUsage> rows)
     {
         if (rows.Count == 0) return rows;
-        if (_cache.Count > 200) _cache.Clear();
+        // Optional: limit cache size; we will prune stale entries instead of clearing entire cache.
+if (_cache.Count > 200)
+{
+    // Keep only entries for processes that appear in the current snapshot.
+    // This prevents unnecessary re‑extracting of icons for active processes.
+    var currentKeys = new HashSet<(int Pid, string Name)>(rows.Select(p => (p.Pid, p.Name)));
+    var keysToRemove = _cache.Keys.Where(k => !currentKeys.Contains(k)).ToList();
+    foreach (var k in keysToRemove)
+        _cache.Remove(k);
+    // If cache is still too large (unlikely), remove oldest entries (simple LRU placeholder).
+    while (_cache.Count > 200)
+    {
+        var oldestKey = _cache.Keys.First(); // Dictionary iteration order is insertion order in .NET 5+.
+        _cache.Remove(oldestKey);
+    }
+}
 
         long largest = Math.Max(1, rows[0].WorkingBytes);
         var result = new ProcessUsage[rows.Count];

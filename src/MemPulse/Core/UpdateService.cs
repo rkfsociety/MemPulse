@@ -36,7 +36,8 @@ public sealed class UpdateService
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
         {
-            Timeout = TimeSpan.FromSeconds(30)
+            // Increased timeout to accommodate large installer downloads (up to 100 MiB).
+            Timeout = TimeSpan.FromMinutes(5)
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("MemPulse-Updater/1.0");
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");

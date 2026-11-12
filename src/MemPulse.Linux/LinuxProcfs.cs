@@ -136,18 +136,32 @@ public sealed class LinuxProcfs
         ulong resident = 0, data = 0;
         bool hasName = false, hasRss = false, hasData = false;
 
-        using var reader = new StreamReader(statusPath);
-        string? line;
-        while ((line = reader.ReadLine()) is not null)
+        // Read the entire status file into a string and parse using the span‑based parser.
+        var text = File.ReadAllText(statusPath);
+        foreach (ReadOnlySpan<char> line in text.AsSpan().EnumerateLines())
         {
-            if (line.Length == 0) continue;
-            if (TryParseStatusLine(line.AsSpan(), ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
+            if (line.IsEmpty) continue;
+            if (TryParseStatusLine(line, ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
                 break;
+        }
+
+        // If the name from /proc/<pid>/status is missing or truncated (comm limited to 15 chars),
+        // fall back to the full command name from /proc/<pid>/comm where available.
+        if (string.IsNullOrWhiteSpace(name) || name.Length < 15)
+        {
+            try
+            {
+                var commPath = Path.Combine(Path.GetDirectoryName(statusPath)!, "comm");
+                var comm = File.ReadAllText(commPath).Trim();
+                if (!string.IsNullOrEmpty(comm))
+                    name = comm;
+            }
+            catch { /* ignore – not all processes expose /comm */ }
         }
 
         return new ProcessUsage(
             pid,
-            name ?? "PID " + pid.ToString(CultureInfo.InvariantCulture),
+            name ?? $"PID {pid}",
             ToLong(resident),
             ToLong(data));
     }

@@ -13,27 +13,25 @@ namespace MemPulse.Core;
 /// </summary>
 public sealed class ProcessIconCache
 {
-    private readonly Dictionary<(int Pid, string Name), byte[]?> _cache = new();
+    // Cache keyed by executable file path to avoid repeatedly opening processes.
+    private readonly Dictionary<string, byte[]?> _cache = new();
 
     public IReadOnlyList<ProcessUsage> Decorate(IReadOnlyList<ProcessUsage> rows)
     {
         if (rows.Count == 0) return rows;
-        // Optional: limit cache size; we will prune stale entries instead of clearing entire cache.
-if (_cache.Count > 200)
-{
-    // Keep only entries for processes that appear in the current snapshot.
-    // This prevents unnecessary re‑extracting of icons for active processes.
-    var currentKeys = new HashSet<(int Pid, string Name)>(rows.Select(p => (p.Pid, p.Name)));
-    var keysToRemove = _cache.Keys.Where(k => !currentKeys.Contains(k)).ToList();
-    foreach (var k in keysToRemove)
-        _cache.Remove(k);
-    // If cache is still too large (unlikely), remove oldest entries (simple LRU placeholder).
-    while (_cache.Count > 200)
-    {
-        var oldestKey = _cache.Keys.First(); // Dictionary iteration order is insertion order in .NET 5+.
-        _cache.Remove(oldestKey);
-    }
-}
+        // Optional: limit cache size; prune stale entries.
+        if (_cache.Count > 200)
+        {
+            var currentKeys = new HashSet<string>(rows.Select(p => GetExecutablePath(p.Pid)).Where(p => p != null)!);
+            var keysToRemove = _cache.Keys.Where(k => !currentKeys.Contains(k)).ToList();
+            foreach (var k in keysToRemove)
+                _cache.Remove(k);
+            while (_cache.Count > 200)
+            {
+                var oldestKey = _cache.Keys.First();
+                _cache.Remove(oldestKey);
+            }
+        }
 
         long largest = Math.Max(1, rows[0].WorkingBytes);
         var result = new ProcessUsage[rows.Count];
@@ -43,11 +41,11 @@ if (_cache.Count > 200)
             byte[]? png = null;
             if (i < 28)
             {
-                var key = (p.Pid, p.Name);
-                if (!_cache.TryGetValue(key, out png))
+                var exePath = GetExecutablePath(p.Pid);
+                if (exePath != null && !_cache.TryGetValue(exePath, out png))
                 {
-                    png = Extract(p.Pid);
-                    _cache[key] = png;
+                    png = ExtractFromPath(exePath);
+                    _cache[exePath] = png;
                 }
             }
             result[i] = p with
@@ -59,13 +57,23 @@ if (_cache.Count > 200)
         return result;
     }
 
-    private static byte[]? Extract(int pid)
+    private static string? GetExecutablePath(int pid)
     {
         try
         {
             using var process = Process.GetProcessById(pid);
-            string? path = process.MainModule?.FileName;
-            if (string.IsNullOrWhiteSpace(path)) return null;
+            return process.MainModule?.FileName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? ExtractFromPath(string path)
+    {
+        try
+        {
             using var icon = Icon.ExtractAssociatedIcon(path);
             if (icon is null) return null;
             using var bitmap = icon.ToBitmap();
@@ -77,7 +85,6 @@ if (_cache.Count > 200)
             or InvalidOperationException or ArgumentException or IOException
             or UnauthorizedAccessException or NotSupportedException)
         {
-            // Protected, short-lived and system processes frequently have no readable icon.
             return null;
         }
     }

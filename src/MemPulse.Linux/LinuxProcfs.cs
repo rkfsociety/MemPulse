@@ -22,8 +22,7 @@ public sealed class LinuxProcfs
                 continue;
             try
             {
-                var status = File.ReadAllText(Path.Combine(directory, "status"));
-                result.Add(ParseProcessStatus(pid, status));
+                result.Add(ReadProcessStatus(pid, Path.Combine(directory, "status")));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -58,52 +57,118 @@ public sealed class LinuxProcfs
     public static MemoryUsage ParseMemInfo(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var data = new Dictionary<string, ulong>(StringComparer.Ordinal);
-        foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        ulong memTotal = 0, memAvailable = 0, memFree = 0, buffers = 0;
+        ulong cached = 0, sReclaimable = 0, committedAs = 0, commitLimit = 0;
+        bool hasMemAvailable = false;
+
+        foreach (ReadOnlySpan<char> line in text.AsSpan().EnumerateLines())
         {
+            if (line.IsEmpty) continue;
             int colon = line.IndexOf(':');
             if (colon < 0) continue;
-            var key = line[..colon];
-            if (TryParseKilobytes(line[(colon + 1)..], out var bytes))
-                data[key] = bytes;
+
+            ReadOnlySpan<char> key = line[..colon];
+            ReadOnlySpan<char> value = line[(colon + 1)..];
+            if (!TryParseKilobytes(value, out ulong bytes))
+                continue;
+
+            switch (key)
+            {
+                case "MemTotal": memTotal = bytes; break;
+                case "MemAvailable": memAvailable = bytes; hasMemAvailable = true; break;
+                case "MemFree": memFree = bytes; break;
+                case "Buffers": buffers = bytes; break;
+                case "Cached": cached = bytes; break;
+                case "SReclaimable": sReclaimable = bytes; break;
+                case "Committed_AS": committedAs = bytes; break;
+                case "CommitLimit": commitLimit = bytes; break;
+            }
         }
 
-        ulong Get(string key) => data.GetValueOrDefault(key);
-        ulong total = Get("MemTotal");
-        if (total == 0) throw new InvalidDataException("/proc/meminfo не содержит MemTotal.");
-        ulong available = data.ContainsKey("MemAvailable") ? Get("MemAvailable") :
-            SaturatingAdd(SaturatingAdd(Get("MemFree"), Get("Buffers")), Get("Cached"));
-        ulong cache = SaturatingAdd(Get("Cached"), Get("SReclaimable"));
-        return new MemoryUsage(total, Math.Min(total, available), cache,
-            Get("Committed_AS"), Get("CommitLimit"));
+        if (memTotal == 0) throw new InvalidDataException("/proc/meminfo не содержит MemTotal.");
+        ulong available = hasMemAvailable ? memAvailable :
+            SaturatingAdd(SaturatingAdd(memFree, buffers), cached);
+        ulong cache = SaturatingAdd(cached, sReclaimable);
+        return new MemoryUsage(memTotal, Math.Min(memTotal, available), cache,
+            committedAs, commitLimit);
     }
 
     public static ProcessUsage ParseProcessStatus(int pid, string status)
     {
         if (pid <= 0) throw new ArgumentOutOfRangeException(nameof(pid));
         ArgumentNullException.ThrowIfNull(status);
-        string name = "PID " + pid.ToString(CultureInfo.InvariantCulture);
+
+        string? name = null;
         ulong resident = 0, data = 0;
-        foreach (string line in status.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        bool hasName = false, hasRss = false, hasData = false;
+
+        foreach (ReadOnlySpan<char> line in status.AsSpan().EnumerateLines())
         {
-            int colon = line.IndexOf(':');
-            if (colon < 0) continue;
-            var key = line[..colon];
-            var value = line[(colon + 1)..].Trim();
-            switch (key)
-            {
-                case "Name":
-                    if (value.Length > 0) name = value;
-                    break;
-                case "VmRSS":
-                    if (TryParseKilobytes(value, out var rss)) resident = rss;
-                    break;
-                case "VmData":
-                    if (TryParseKilobytes(value, out var vmData)) data = vmData;
-                    break;
-            }
+            if (line.IsEmpty) continue;
+            if (TryParseStatusLine(line, ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
+                break;
         }
-        return new ProcessUsage(pid, name, ToLong(resident), ToLong(data));
+
+        return new ProcessUsage(
+            pid,
+            name ?? "PID " + pid.ToString(CultureInfo.InvariantCulture),
+            ToLong(resident),
+            ToLong(data));
+    }
+
+    private static ProcessUsage ReadProcessStatus(int pid, string statusPath)
+    {
+        string? name = null;
+        ulong resident = 0, data = 0;
+        bool hasName = false, hasRss = false, hasData = false;
+
+        using var reader = new StreamReader(statusPath);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (line.Length == 0) continue;
+            if (TryParseStatusLine(line.AsSpan(), ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
+                break;
+        }
+
+        return new ProcessUsage(
+            pid,
+            name ?? "PID " + pid.ToString(CultureInfo.InvariantCulture),
+            ToLong(resident),
+            ToLong(data));
+    }
+
+    private static bool TryParseStatusLine(
+        ReadOnlySpan<char> line,
+        ref string? name,
+        ref ulong resident,
+        ref ulong data,
+        ref bool hasName,
+        ref bool hasRss,
+        ref bool hasData)
+    {
+        int colon = line.IndexOf(':');
+        if (colon < 0) return false;
+
+        ReadOnlySpan<char> key = line[..colon];
+        ReadOnlySpan<char> value = line[(colon + 1)..].Trim();
+        switch (key)
+        {
+            case "Name":
+                if (value.Length > 0) name = value.ToString();
+                hasName = true;
+                break;
+            case "VmRSS":
+                if (TryParseKilobytes(value, out ulong rss)) resident = rss;
+                hasRss = true;
+                break;
+            case "VmData":
+                if (TryParseKilobytes(value, out ulong vmData)) data = vmData;
+                hasData = true;
+                break;
+        }
+
+        return hasName && hasRss && hasData;
     }
 
     private static long ToLong(ulong n) => n > long.MaxValue ? long.MaxValue : (long)n;
@@ -111,16 +176,42 @@ public sealed class LinuxProcfs
     private static ulong SaturatingAdd(ulong a, ulong b) =>
         ulong.MaxValue - a < b ? ulong.MaxValue : a + b;
 
-    private static bool TryParseKilobytes(string value, out ulong bytes)
+    private static bool TryParseKilobytes(ReadOnlySpan<char> value, out ulong bytes)
     {
         bytes = 0;
-        var fields = value.Trim().Split((char[]?)null,
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (fields.Length == 0 ||
-            !ulong.TryParse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture, out var number))
+        value = value.Trim();
+        if (value.IsEmpty) return false;
+
+        int wsIndex = -1;
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (char.IsWhiteSpace(value[i]))
+            {
+                wsIndex = i;
+                break;
+            }
+        }
+
+        ReadOnlySpan<char> numberSpan;
+        if (wsIndex < 0)
+        {
+            numberSpan = value;
+        }
+        else
+        {
+            numberSpan = value[..wsIndex];
+            ReadOnlySpan<char> rest = value[(wsIndex + 1)..].TrimStart();
+            if (!rest.IsEmpty)
+            {
+                if (!rest.StartsWith("kB", StringComparison.Ordinal) ||
+                    (rest.Length > 2 && !char.IsWhiteSpace(rest[2])))
+                    return false;
+            }
+        }
+
+        if (!ulong.TryParse(numberSpan, NumberStyles.None, CultureInfo.InvariantCulture, out ulong number))
             return false;
-        if (fields.Length > 1 && fields[1] != "kB")
-            return false;
+
         bytes = number > ulong.MaxValue / 1024 ? ulong.MaxValue : number * 1024;
         return true;
     }

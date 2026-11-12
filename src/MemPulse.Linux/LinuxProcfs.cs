@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using MemPulse.Core;
 
 namespace MemPulse.Linux;
@@ -47,11 +48,24 @@ public sealed class LinuxProcfs
         ticks = 0;
         int delimiter = stat.LastIndexOf(')');
         if (delimiter < 0 || delimiter + 1 >= stat.Length) return false;
-        string[] tail = stat[(delimiter + 1)..].Split((char[]?)null,
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return tail.Length >= 20 &&
-            ulong.TryParse(tail[19], NumberStyles.None, CultureInfo.InvariantCulture, out ticks) &&
-            ticks != 0;
+        ReadOnlySpan<char> tailSpan = stat.AsSpan((delimiter + 1));
+        int tokenCount = 0;
+        int i = 0;
+        while (i < tailSpan.Length)
+        {
+            // Skip whitespace
+            while (i < tailSpan.Length && char.IsWhiteSpace(tailSpan[i])) i++;
+            if (i >= tailSpan.Length) break;
+            int start = i;
+            while (i < tailSpan.Length && !char.IsWhiteSpace(tailSpan[i])) i++;
+            tokenCount++;
+            if (tokenCount == 20)
+            {
+                var token = tailSpan.Slice(start, i - start);
+                return ulong.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out ticks) && ticks != 0;
+            }
+        }
+        return false;
     }
 
     public static MemoryUsage ParseMemInfo(string text)

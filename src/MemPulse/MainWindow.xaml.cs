@@ -102,8 +102,8 @@ public partial class MainWindow : Window
         AboutVersionText.Text = "Версия " + UpdateService.CurrentVersion + " · Windows x64";
         LoadSettingsControls();
         UpdateAutomationSummary();
-        ElevateButton.Visibility = CleanupService.IsElevated ? Visibility.Collapsed : Visibility.Visible;
-        CleanButton.IsEnabled = CleanupService.IsElevated;
+        ElevateButton.Visibility = Visibility.Collapsed;
+        CleanButton.IsEnabled = true;
         try
         {
             InitializeTray();
@@ -118,7 +118,7 @@ public partial class MainWindow : Window
         ConfigureTimer();
         StartupLog.Info("Главное окно: таймер запущен");
         if (CleanupService.IsElevated) SetStatus("Режим администратора · очистка доступна");
-        else SetStatus("Мониторинг включён · для системной очистки нужны права администратора");
+        else SetStatus("Мониторинг включён · очистка запускается отдельным помощником с запросом UAC");
         await RefreshAsync();
         StartupLog.Info("Главное окно: первый опрос завершён");
         ConfigureUpdateTimer();
@@ -249,7 +249,7 @@ public partial class MainWindow : Window
             ApplyProcessSnapshot(groups, totalProcesses);
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
-            if (_settings.AutoClean && CleanupService.IsElevated &&
+            if (_settings.AutoClean &&
                 memory.UsedPercent >= _settings.AutoCleanThreshold &&
                 DateTime.UtcNow - _lastAutoCleanUtc >=
                     TimeSpan.FromMinutes(_settings.AutoCleanCooldownMinutes))
@@ -489,7 +489,7 @@ public partial class MainWindow : Window
         finally
         {
             _cleaning = false;
-            CleanButton.IsEnabled = CleanupService.IsElevated;
+            CleanButton.IsEnabled = true;
             UpdateTrimButton();
         }
     }
@@ -527,7 +527,7 @@ public partial class MainWindow : Window
         finally
         {
             _cleaning = false;
-            CleanButton.IsEnabled = CleanupService.IsElevated;
+            CleanButton.IsEnabled = true;
             UpdateTrimButton();
         }
         await RefreshAsync();

@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -17,6 +17,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (CleanupService.IsHelperMode(args)) return CleanupService.RunHelperMode(args);
         StartupLog.Initialize();
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Security.Principal;
 using Microsoft.Extensions.Logging;
 
@@ -26,15 +27,80 @@ public sealed class CleanupService
 
     public CleanupReport Clean(CleanupOptions options)
     {
-        var report = new CleanupReport();
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
         {
-            report.Steps.Add(new CleanupStep("Нет выбранных действий очистки", false, "Выберите хотя бы одну опцию в настройках автоочистки."));
-            return report;
+            var empty = new CleanupReport();
+            empty.Steps.Add(new CleanupStep("Нет выбранных действий очистки", false, "Выберите хотя бы одну опцию в настройках автоочистки."));
+            return empty;
         }
+        if (IsElevated) return CleanElevated(options);
+        var args = "--clean-cache" + (options.Standby ? " --standby" : "") +
+            (options.WorkingSets ? " --workingsets" : "") + (options.ModifiedPages ? " --modified" : "");
+        return RunHelper(args, "Очистка памяти");
+    }
+
+    // Запускает короткий экземпляр MemPulse с правами администратора (UAC) и ждёт его завершения.
+    private static CleanupReport RunHelper(string args, string label)
+    {
+        var report = new CleanupReport();
+        try
+        {
+            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не найден исполняемый файл.");
+            using var proc = Process.Start(new ProcessStartInfo(exe, args)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+            if (proc is null)
+            {
+                report.Steps.Add(new CleanupStep(label, false, "Не удалось запустить помощник."));
+                return report;
+            }
+            proc.WaitForExit();
+            bool ok = proc.ExitCode == 0;
+            report.Steps.Add(new CleanupStep(label, ok, ok ? "Выполнено помощником с правами администратора." : "Помощник завершился с кодом " + proc.ExitCode + "."));
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            report.Steps.Add(new CleanupStep(label, false, "Запрос UAC отклонён."));
+        }
+        catch (Exception ex)
+        {
+            report.Steps.Add(new CleanupStep(label, false, ex.Message));
+        }
+        return report;
+    }
+
+    // Точка входа помощника: возвращает код выхода процесса.
+    public static int RunHelperMode(string[] args)
+    {
+        var svc = new CleanupService();
+        CleanupReport report;
+        int i = Array.FindIndex(args, a => a.Equals("--trim-process", StringComparison.OrdinalIgnoreCase));
+        if (i >= 0)
+        {
+            int pid = i + 1 < args.Length && int.TryParse(args[i + 1], out var v) ? v : 0;
+            report = svc.TrimProcessDirect(pid);
+        }
+        else
+        {
+            bool Has(string f) => args.Contains(f, StringComparer.OrdinalIgnoreCase);
+            report = svc.CleanElevated(new CleanupOptions(Has("--standby"), Has("--workingsets"), Has("--modified")));
+        }
+        return report.Steps.Count > 0 && report.Steps.All(s => s.Success) ? 0 : 1;
+    }
+
+    public static bool IsHelperMode(string[] args) =>
+        args.Contains("--clean-cache", StringComparer.OrdinalIgnoreCase) ||
+        args.Contains("--trim-process", StringComparer.OrdinalIgnoreCase);
+
+    private CleanupReport CleanElevated(CleanupOptions options)
+    {
+        var report = new CleanupReport();
         if (!IsElevated)
         {
-            report.Steps.Add(new CleanupStep("Нужны права администратора", false, "Перезапустите MemPulse от имени администратора."));
+            report.Steps.Add(new CleanupStep("Нужны права администратора", false, "Помощник запущен без повышения прав."));
             return report;
         }
         if (!EnablePrivilege("SeProfileSingleProcessPrivilege"))
@@ -42,16 +108,15 @@ public sealed class CleanupService
             report.Steps.Add(new CleanupStep("Привилегия", false, "Недоступна привилегия SeProfileSingleProcessPrivilege."));
             return report;
         }
-
-        // SystemMemoryListInformation is an undocumented Windows interface. Errors are reported,
-        // never silently treated as success; individual operations are intentionally optional.
         if (options.Standby) Run(report, 4, "Кэш ожидания");
         if (options.WorkingSets) Run(report, 2, "Рабочие наборы процессов");
         if (options.ModifiedPages) Run(report, 3, "Изменённые страницы");
         return report;
     }
 
-    public CleanupReport TrimProcess(int pid)
+    public CleanupReport TrimProcess(int pid) =>
+        pid > 0 && !IsElevated ? RunHelper("--trim-process " + pid, "Процесс " + pid) : TrimProcessDirect(pid);
+    private CleanupReport TrimProcessDirect(int pid)
     {
         var report = new CleanupReport();
         if (pid <= 0)

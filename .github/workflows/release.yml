@@ -86,6 +86,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+        - name: Restore dependencies
+          if: steps.version.outputs.publish == 'true'
+          shell: pwsh
+          run: dotnet restore src/MemPulse/MemPulse.csproj
+
+        - name: Build
+
       - name: Build
         if: steps.version.outputs.publish == 'true'
         shell: pwsh

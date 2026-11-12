@@ -20,15 +20,17 @@ public sealed record ProcessUsage(int Pid, string Name, long WorkingBytes, long 
 
 public static class Format
 {
+    private static readonly string[] Units = ["Б", "КБ", "МБ", "ГБ", "ТБ", "ПБ"];
     public static string Bytes(long bytes) => Bytes((ulong)Math.Max(0, bytes));
 
     public static string Bytes(ulong bytes)
     {
-        double size = bytes;
-        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ", "ПБ"];
-        int index = 0;
-        while (size >= 1024 && index < units.Length - 1) { size /= 1024; index++; }
-        return size.ToString(index == 0 ? "0" : "0.0", CultureInfo.CurrentCulture) + " " + units[index];
+        if (bytes == 0) return "0 Б";
+        // Determine unit index using logarithm (base 1024)
+        int index = (int)Math.Floor(Math.Log(bytes, 1024));
+        index = Math.Min(index, Units.Length - 1);
+        double size = bytes / Math.Pow(1024, index);
+        return size.ToString(index == 0 ? "0" : "0.0", CultureInfo.CurrentCulture) + " " + Units[index];
     }
 }
 

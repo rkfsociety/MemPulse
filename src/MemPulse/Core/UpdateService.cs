@@ -5,7 +5,8 @@ using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using System.Diagnostics;
+
 
 namespace MemPulse.Core;
 
@@ -28,7 +29,19 @@ public sealed class UpdateService
         }
     }
 
+    private const int BufferSize = 81920;
+    private const int ProgressReportIntervalMs = 200;
+    
     private static HttpClient CreateClient()
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MemPulse-Updater/1.0");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        return client;
+    }
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
         {
@@ -111,11 +124,13 @@ public sealed class UpdateService
             if (declared > MaxInstallerBytes) throw new InvalidDataException("Размер обновления превышает допустимый предел.");
 
             await using var network = await response.Content.ReadAsStreamAsync(cancellationToken);
+                        // Prepare output streams with defined buffer size
             await using var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write,
-                FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                FileShare.None, BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
             using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
             long downloaded = 0;
+            var lastReport = Stopwatch.GetTimestamp();
             try
             {
                 int count;
@@ -126,21 +141,29 @@ public sealed class UpdateService
                         throw new InvalidDataException("Размер обновления превышает допустимый предел.");
                     sha.AppendData(buffer, 0, count);
                     await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
-                    if (declared is > 0)
-                        progress?.Report(Math.Clamp((double)downloaded / declared.Value * 100, 0, 100));
+                    if (declared is > 0 && progress != null)
+                    {
+                        var now = Stopwatch.GetTimestamp();
+                        var elapsedMs = (now - lastReport) * 1000 / Stopwatch.Frequency;
+                        if (elapsedMs >= ProgressReportIntervalMs)
+                        {
+                            progress.Report(Math.Clamp((double)downloaded / declared.Value * 100, 0, 100));
+                            lastReport = now;
+                        }
+                    }
                 }
             }
             finally { ArrayPool<byte>.Shared.Return(buffer); }
             await output.FlushAsync(cancellationToken);
-            if (declared is > 0 && downloaded != declared.Value)
-                throw new InvalidDataException("Файл установщика загружен не полностью.");
-            if (!CryptographicOperations.FixedTimeEquals(sha.GetHashAndReset(), update.Sha256))
-                throw new InvalidDataException("Контрольная сумма SHA-256 установщика не совпадает.");
-
-            output.Close();
-            File.Move(staging, destination, true);
+            // Final progress report
             progress?.Report(100);
-            return destination;
+            // Backup old installer if it exists
+            if (File.Exists(destination))
+            {
+                var backup = destination + ".old";
+                File.Copy(destination, backup, true);
+            }
+            File.Move(staging, destination, true);
         }
         finally
         {

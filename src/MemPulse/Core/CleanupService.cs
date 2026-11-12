@@ -22,7 +22,11 @@ public sealed class CleanupService
     public CleanupReport Clean(CleanupOptions options)
     {
         var report = new CleanupReport();
-        if (!options.Standby && !options.WorkingSets && !options.ModifiedPages) return report;
+        if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
+{
+    report.Steps.Add(new CleanupStep("Нет выбранных действий очистки", false, "Выберите хотя бы одну опцию в настройках автоочистки."));
+    return report;
+}
         if (!IsElevated)
         {
             report.Steps.Add(new CleanupStep("Нужны права администратора", false, "Перезапустите MemPulse от имени администратора."));
@@ -82,8 +86,10 @@ public sealed class CleanupService
         }
     }
 
+    private static bool _privilegeEnabled = false;
     private static bool EnablePrivilege(string name)
     {
+        if (_privilegeEnabled) return true;
         if (!Native.OpenProcessToken(Native.GetCurrentProcess(), TokenAdjustPrivileges | TokenQuery, out var token))
             return false;
         try
@@ -91,11 +97,21 @@ public sealed class CleanupService
             if (!Native.LookupPrivilegeValue(null, name, out var luid)) return false;
             var state = new Native.TOKEN_PRIVILEGES
             {
-                PrivilegeCount = 1, Luid = luid, Attributes = SePrivilegeEnabled
+                PrivilegeCount = 1,
+                Luid = luid,
+                Attributes = SePrivilegeEnabled
             };
-            return Native.AdjustTokenPrivileges(token, false, ref state, 0, IntPtr.Zero, IntPtr.Zero)
-                && Marshal.GetLastWin32Error() != 1300; // ERROR_NOT_ALL_ASSIGNED
+            bool adjusted = Native.AdjustTokenPrivileges(token, false, ref state, 0, IntPtr.Zero, IntPtr.Zero);
+            // AdjustTokenPrivileges returns false on failure; also check last error
+            if (!adjusted || Marshal.GetLastWin32Error() != 0)
+                return false;
+            _privilegeEnabled = true;
+            return true;
         }
-        finally { Native.CloseHandle(token); }
+        finally
+        {
+            if (token != IntPtr.Zero) Native.CloseHandle(token);
+        }
     }
+
 }

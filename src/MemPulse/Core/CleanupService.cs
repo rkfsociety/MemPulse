@@ -1,12 +1,16 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-    private static readonly ILogger Logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<CleanupService>();
-
+using System.Security.Principal;
+using Microsoft.Extensions.Logging;
 
 namespace MemPulse.Core;
 
 public sealed class CleanupService
 {
+    private static readonly ILogger Logger = LoggerFactory
+        .Create(builder => builder.AddConsole())
+        .CreateLogger<CleanupService>();
+
     private const uint TokenAdjustPrivileges = 0x20, TokenQuery = 0x08, SePrivilegeEnabled = 0x02;
     private const uint ProcessSetQuota = 0x0100, ProcessQueryLimitedInformation = 0x1000;
     private const int SystemMemoryListInformation = 80;
@@ -24,10 +28,10 @@ public sealed class CleanupService
     {
         var report = new CleanupReport();
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
-{
-    report.Steps.Add(new CleanupStep("Нет выбранных действий очистки", false, "Выберите хотя бы одну опцию в настройках автоочистки."));
-    return report;
-}
+        {
+            report.Steps.Add(new CleanupStep("Нет выбранных действий очистки", false, "Выберите хотя бы одну опцию в настройках автоочистки."));
+            return report;
+        }
         if (!IsElevated)
         {
             report.Steps.Add(new CleanupStep("Нужны права администратора", false, "Перезапустите MemPulse от имени администратора."));
@@ -103,7 +107,6 @@ public sealed class CleanupService
                 Attributes = SePrivilegeEnabled
             };
             bool adjusted = Native.AdjustTokenPrivileges(token, false, ref state, 0, IntPtr.Zero, IntPtr.Zero);
-            // AdjustTokenPrivileges returns false on failure; also check last error
             if (!adjusted || Marshal.GetLastWin32Error() != 0)
                 return false;
             _privilegeEnabled = true;
@@ -114,5 +117,4 @@ public sealed class CleanupService
             if (token != IntPtr.Zero) Native.CloseHandle(token);
         }
     }
-
 }

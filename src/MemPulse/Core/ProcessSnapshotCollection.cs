@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using System.Linq;
 using System.Collections.Specialized;
 using System.ComponentModel;
 
@@ -14,6 +16,10 @@ public sealed class ProcessSnapshotCollection<T> : ObservableCollection<T>
     {
         // Enumerate before clearing: consumers may hand in a lazy snapshot.
         var snapshot = items.ToArray();
+        // If the collection already contains the same items in the same order, do nothing.
+        if (Items.SequenceEqual(snapshot))
+            return;
+
         CheckReentrancy();
         Items.Clear();
         foreach (var item in snapshot)

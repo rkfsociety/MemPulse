@@ -32,7 +32,7 @@ public sealed class MainWindow : Window
     private readonly TextBlock _processCount = new() { Foreground = Muted, FontSize = 12 };
     private readonly TextBlock _status = new() { Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly ProgressBar _usageBar = new() { Minimum = 0, Maximum = 100, Height = 8, Foreground = Highlight, Background = Track };
-    private readonly TextBox _filter = new() { Watermark = "Поиск имени или PID", Width = 240 };
+    private readonly TextBox _filter = new() { PlaceholderText = "Поиск имени или PID", Width = 240 };
     private readonly ComboBox _sort = new()
     {
         ItemsSource = new[] { "ОЗУ ↓", "Data ↓", "Имя А–Я", "Процессов ↓" },

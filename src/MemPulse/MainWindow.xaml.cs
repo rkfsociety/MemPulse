@@ -9,6 +9,7 @@ using MemPulse.Core;
 using Forms = System.Windows.Forms;
 
 using Button = System.Windows.Controls.Button;
+using DataGrid = System.Windows.Controls.DataGrid;
 using Window = System.Windows.Window;
 using MessageBox = System.Windows.MessageBox;
 
@@ -653,9 +654,10 @@ public partial class MainWindow : Window
             if (string.Equals(System.IO.Path.GetFileName(executable), "dotnet.exe",
                 StringComparison.OrdinalIgnoreCase))
             {
-                var dll = System.Reflection.Assembly.GetEntryAssembly()?.Location;
-                if (string.IsNullOrWhiteSpace(dll))
-                    throw new InvalidOperationException("Для запуска от администратора сначала опубликуйте приложение.");
+                // `dotnet <assembly>.dll` puts the entry assembly first in the
+                // command line. Assembly.Location is empty in single-file builds
+                // (IL3000), and this branch is never reached there.
+                var dll = System.IO.Path.GetFullPath(Environment.GetCommandLineArgs()[0]);
                 start.Arguments = "\"" + dll + "\"";
             }
             if (Process.Start(start) is not null)

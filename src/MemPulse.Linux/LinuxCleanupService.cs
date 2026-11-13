@@ -209,8 +209,10 @@ public static class LinuxCleanupService
         // In SDK/development mode the app is launched with dotnet <assembly.dll>.
         if (Path.GetFileName(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
-            string assembly = System.Reflection.Assembly.GetEntryAssembly()?.Location
-                ?? throw new InvalidOperationException("Не найдена исполняемая сборка.");
+            // The managed entry assembly is the first command line argument.
+            // Assembly.Location is empty in single-file builds (IL3000), and this
+            // branch is never reached there.
+            string assembly = Path.GetFullPath(Environment.GetCommandLineArgs()[0]);
             start.ArgumentList.Add(executable);
             start.ArgumentList.Add(assembly);
         }

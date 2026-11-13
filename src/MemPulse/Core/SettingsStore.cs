@@ -63,12 +63,16 @@ public static class StartupService
 
     public static bool IsEnabled()
     {
+        // This file is also linked into cross-platform test projects, so the
+        // Windows-only registry APIs must be guarded for CA1416.
+        if (!OperatingSystem.IsWindows()) return false;
         using var key = Registry.CurrentUser.OpenSubKey(RegistryPath, false);
         return key?.GetValue(ValueName) is string;
     }
 
     public static void SetEnabled(bool enabled)
     {
+        if (!OperatingSystem.IsWindows()) return;
         using var key = Registry.CurrentUser.OpenSubKey(RegistryPath, true)
             ?? Registry.CurrentUser.CreateSubKey(RegistryPath);
         if (!enabled) { key.DeleteValue(ValueName, false); return; }
@@ -78,9 +82,10 @@ public static class StartupService
         string command = "\"" + executable + "\"";
         if (string.Equals(Path.GetFileName(executable), "dotnet.exe", StringComparison.OrdinalIgnoreCase))
         {
-            var assemblyPath = System.Reflection.Assembly.GetEntryAssembly()?.Location;
-            if (string.IsNullOrWhiteSpace(assemblyPath))
-                throw new InvalidOperationException("Для включения автозапуска сначала необходимо опубликовать приложение.");
+            // The entry assembly path is the first command line argument when the
+            // app runs as `dotnet <assembly>.dll`. Assembly.Location would emit
+            // IL3000 because it always returns an empty string in single-file builds.
+            string assemblyPath = Path.GetFullPath(Environment.GetCommandLineArgs()[0]);
             command += " \"" + assemblyPath + "\"";
         }
         key.SetValue(ValueName, command, RegistryValueKind.String);

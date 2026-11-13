@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Button = System.Windows.Controls.Button;
+using DataGridCell = System.Windows.Controls.DataGridCell;
 using Orientation = System.Windows.Controls.Orientation;
 using ScrollBar = System.Windows.Controls.Primitives.ScrollBar;
 using Size = System.Windows.Size;

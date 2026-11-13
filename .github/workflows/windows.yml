@@ -8,8 +8,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
       - name: Build WPF app
@@ -42,7 +42,7 @@ jobs:
           Write-Host "PASS: Packaged MemPulse starts, initializes WPF and writes startup diagnostics."
 
       - name: Upload portable app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: MemPulse-win-x64
           path: publish/

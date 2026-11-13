@@ -21,7 +21,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -94,7 +94,7 @@ jobs:
           "APP_VERSION=$version" >> $env:GITHUB_ENV
           "publish=true" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.version.outputs.publish == 'true'
         with:
           dotnet-version: '8.0.x'
@@ -177,7 +177,7 @@ jobs:
       # Preserve verified installers even if the GitHub Release API denies publication.
       - name: Preserve verified build artifacts
         if: steps.version.outputs.publish == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mempulse-${{ env.APP_VERSION }}-release-candidate
           path: |

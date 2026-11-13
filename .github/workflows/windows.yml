@@ -41,9 +41,6 @@ jobs:
           }
           Write-Host "PASS: Packaged MemPulse starts, initializes WPF and writes startup diagnostics."
 
-
-          
-
       - name: Upload portable app
         uses: actions/upload-artifact@v4
         with:

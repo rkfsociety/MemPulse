@@ -32,8 +32,22 @@ jobs:
           BEFORE_COMMIT: ${{ github.event.before }}
         run: |
           $ErrorActionPreference = 'Stop'
-          [xml]$project = Get-Content 'src/Directory.Build.props' -Raw
-          $version = $project.SelectSingleNode('//Version').InnerText
+
+          # Reads <Version> from project file text. Text produced by native
+          # commands (`git show`) may start with a UTF-8 BOM or with decoding
+          # artifacts, which breaks an [xml] cast, so match the element instead.
+          function Get-ProjectVersion([string]$text, [string]$source) {
+            if ([string]::IsNullOrWhiteSpace($text)) {
+              throw "Project file is empty: $source"
+            }
+            $match = [regex]::Match($text, '<Version>\s*([^<]*?)\s*</Version>', 'IgnoreCase')
+            if (-not $match.Success -or [string]::IsNullOrWhiteSpace($match.Groups[1].Value)) {
+              throw "Cannot read <Version> from $source"
+            }
+            return $match.Groups[1].Value.Trim()
+          }
+
+          $version = Get-ProjectVersion (Get-Content 'src/Directory.Build.props' -Raw) 'src/Directory.Build.props'
           $versionPattern = '^((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))$'
           if ($version -cnotmatch $versionPattern) {
             throw "Project version must be MAJOR.MINOR.PATCH (without a v prefix): $version"
@@ -47,8 +61,7 @@ jobs:
             $previousSpec = "$($before):src/Directory.Build.props"
             $previousText = @(git show $previousSpec) -join "`n"
             if ($LASTEXITCODE -ne 0) { throw "Cannot read previous project from $before" }
-            [xml]$previousProject = $previousText
-            $oldVersion = $previousProject.SelectSingleNode('//Version').InnerText
+            $oldVersion = Get-ProjectVersion $previousText "src/Directory.Build.props at $before"
             if ($oldVersion -eq $version) {
               Write-Host "Version unchanged ($version). No tag or release will be created."
               Add-Content -Path $env:GITHUB_OUTPUT -Value "publish=false"

@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directories:
+      - "/src/MemPulse"
+      - "/src/MemPulse.PulseModule"
+      - "/tests/MemPulse.SmokeTests"
+      - "/tests/MemPulse.LinuxTests"
+      - "/tests/MemPulse.IconTests"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "PCPulse.Contracts"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

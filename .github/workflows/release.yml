@@ -224,6 +224,8 @@ jobs:
         run: |
           set -euo pipefail
           cd release-bundle
+          find . -mindepth 2 -type f -exec mv -f -t . {} +
+          find . -mindepth 1 -type d -empty -delete
           rm -f SHA256SUMS.txt
           ls -1
           sha256sum MemPulse.exe MemPulse-Setup-x64.exe MemPulse-win-x64.zip MemPulse-linux-x64.tar.gz MemPulse-linux-arm64.tar.gz mempulse-module-*.zip > SHA256SUMS.txt

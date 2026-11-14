@@ -24,6 +24,7 @@ if [[ "$MANIFEST_VERSION" != "$VERSION" ]]; then
 fi
 
 mkdir -p "$OUT_DIR"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 STAGE_MOD="$ROOT_DIR/obj/stage/module-$RID"
 STAGE_HLP="$ROOT_DIR/obj/stage/helper-$RID"
 STAGE_PKG="$ROOT_DIR/obj/stage/pack-$RID"

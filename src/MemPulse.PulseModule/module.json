@@ -2,7 +2,7 @@
   "id": "mempulse",
   "name": "MemPulse",
   "description": "Мониторинг и очистка оперативной памяти, кэша и процессов",
-  "version": "0.2.42",
+  "version": "0.2.43",
   "contractVersion": "1.0",
   "platforms": [ "windows", "linux" ],
   "entryAssembly": "MemPulse.PulseModule.dll",

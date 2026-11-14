@@ -2,16 +2,11 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Security.Principal;
-using Microsoft.Extensions.Logging;
 
 namespace MemPulse.Core;
 
 public sealed class CleanupService
 {
-    private static readonly ILogger Logger = LoggerFactory
-        .Create(builder => builder.AddConsole())
-        .CreateLogger<CleanupService>();
-
     private const uint TokenAdjustPrivileges = 0x20, TokenQuery = 0x08, SePrivilegeEnabled = 0x02;
     private const uint ProcessSetQuota = 0x0100, ProcessQueryLimitedInformation = 0x1000;
     private const int SystemMemoryListInformation = 80;

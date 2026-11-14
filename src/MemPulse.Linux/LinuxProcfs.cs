@@ -23,7 +23,7 @@ public sealed class LinuxProcfs
                 continue;
             try
             {
-                result.Add(ReadProcessStatus(pid, Path.Combine(directory, "status")));
+                result.Add(ReadProcessStatus(pid, directory));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -130,33 +130,29 @@ public sealed class LinuxProcfs
             ToLong(data));
     }
 
-    private static ProcessUsage ReadProcessStatus(int pid, string statusPath)
+    private static ProcessUsage ReadProcessStatus(int pid, string processDirectory)
     {
         string? name = null;
         ulong resident = 0, data = 0;
         bool hasName = false, hasRss = false, hasData = false;
 
-        // Read the entire status file into a string and parse using the span‑based parser.
-        var text = File.ReadAllText(statusPath);
-        foreach (ReadOnlySpan<char> line in text.AsSpan().EnumerateLines())
+        using (var reader = new StreamReader(Path.Combine(processDirectory, "status")))
         {
-            if (line.IsEmpty) continue;
-            if (TryParseStatusLine(line, ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
-                break;
+            while (reader.ReadLine() is { } line)
+            {
+                if (line.Length == 0) continue;
+                if (TryParseStatusLine(line.AsSpan(), ref name, ref resident, ref data, ref hasName, ref hasRss, ref hasData))
+                    break;
+            }
         }
 
-        // If the name from /proc/<pid>/status is missing or truncated (comm limited to 15 chars),
-        // fall back to the full command name from /proc/<pid>/comm where available.
-        if (string.IsNullOrWhiteSpace(name) || name.Length < 15)
+        // Linux truncates /proc/<pid>/status Name (TASK_COMM_LEN - 1) at 15 bytes.
+        // Only inspect /proc/<pid>/cmdline when missing or truncated at 15 chars.
+        if (string.IsNullOrWhiteSpace(name) || name.Length == 15)
         {
-            try
-            {
-                var commPath = Path.Combine(Path.GetDirectoryName(statusPath)!, "comm");
-                var comm = File.ReadAllText(commPath).Trim();
-                if (!string.IsNullOrEmpty(comm))
-                    name = comm;
-            }
-            catch { /* ignore – not all processes expose /comm */ }
+            string? cmdlineName = TryReadProcessNameFromCmdline(Path.Combine(processDirectory, "cmdline"));
+            if (!string.IsNullOrEmpty(cmdlineName))
+                name = cmdlineName;
         }
 
         return new ProcessUsage(
@@ -164,6 +160,32 @@ public sealed class LinuxProcfs
             name ?? $"PID {pid}",
             ToLong(resident),
             ToLong(data));
+    }
+
+    private static string? TryReadProcessNameFromCmdline(string cmdlinePath)
+    {
+        try
+        {
+            using var stream = new FileStream(cmdlinePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            Span<byte> buffer = stackalloc byte[1024];
+            int read = stream.Read(buffer);
+            if (read <= 0) return null;
+
+            ReadOnlySpan<byte> slice = buffer[..read];
+            int nul = slice.IndexOf((byte)0);
+            if (nul == 0) return null;
+            if (nul > 0) slice = slice[..nul];
+
+            string arg0 = System.Text.Encoding.UTF8.GetString(slice).Trim();
+            if (arg0.Length == 0) return null;
+
+            string fileName = Path.GetFileName(arg0);
+            return string.IsNullOrWhiteSpace(fileName) ? arg0 : fileName;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static bool TryParseStatusLine(

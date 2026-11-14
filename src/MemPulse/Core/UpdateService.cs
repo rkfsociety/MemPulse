@@ -8,7 +8,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
 namespace MemPulse.Core;
 
@@ -16,11 +15,6 @@ public sealed record AvailableUpdate(Version Version, string Tag, Uri InstallerU
 
 public sealed class UpdateService
 {
-    // Logger
-    private static readonly ILogger Logger = LoggerFactory
-        .Create(builder => builder.AddConsole())
-        .CreateLogger<UpdateService>();
-
     // Constants
     private const string LatestApi = "https://api.github.com/repos/rkfsociety/MemPulse/releases/latest";
     private const string InstallerName = "MemPulse-Setup-x64.exe";
@@ -57,7 +51,7 @@ public sealed class UpdateService
             catch (HttpRequestException) when (attempt < MaxRetryAttempts)
             {
                 attempt++;
-                Logger.LogWarning("Retry attempt {Attempt}", attempt);
+                StartupLog.Warn($"Повторная попытка запроса обновления #{attempt}");
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
                 await Task.Delay(delay);
             }

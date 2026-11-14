@@ -138,6 +138,28 @@ finally
     if (Directory.Exists(settingsDirectory)) Directory.Delete(settingsDirectory, true);
 }
 
+string fakeProcRoot = Path.Combine(Path.GetTempPath(), "mempulse-proc-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(Path.Combine(fakeProcRoot, "101"));
+    File.WriteAllText(Path.Combine(fakeProcRoot, "101", "status"), "Name:\tbash\nState:\tS (sleeping)\nVmRSS:\t2048 kB\nVmData:\t512 kB\n");
+    File.WriteAllText(Path.Combine(fakeProcRoot, "101", "cmdline"), "/bin/other-should-not-override\0");
+
+    Directory.CreateDirectory(Path.Combine(fakeProcRoot, "102"));
+    File.WriteAllText(Path.Combine(fakeProcRoot, "102", "status"), "Name:\tWebKitWebProces\nState:\tS (sleeping)\nVmRSS:\t4096 kB\nVmData:\t1024 kB\n");
+    File.WriteAllText(Path.Combine(fakeProcRoot, "102", "cmdline"), "/usr/lib/webkit/WebKitWebProcess\0--type=gpu\0");
+
+    var procfs = new LinuxProcfs(fakeProcRoot);
+    var procs = procfs.ReadProcesses();
+    Assert(procs.Count == 2, "fake procfs reads both processes");
+    Assert(procs.Any(x => x.Pid == 102 && x.Name == "WebKitWebProcess"), "15-char truncated name expands from cmdline");
+    Assert(procs.Any(x => x.Pid == 101 && x.Name == "bash"), "short process name skips cmdline override");
+}
+finally
+{
+    if (Directory.Exists(fakeProcRoot)) Directory.Delete(fakeProcRoot, true);
+}
+
 if (OperatingSystem.IsLinux())
 {
     var live = new LinuxProcfs();

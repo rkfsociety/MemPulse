@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     private TaskCompletionSource<bool>? _confirmation;
     private bool _checkingUpdates;
     private bool _installingUpdate;
-    private readonly ProcessSnapshotCollection<ProcessGroupUsage> _groups = [];
+    private readonly ProcessSnapshotCollection<ProcessGroupUsage> _groups = new(ProcessGrouping.SnapshotComparer);
     private readonly ListCollectionView _overviewView;
     private readonly ListCollectionView _detailView;
     private enum Section { Overview, Processes, Settings, About }
@@ -43,6 +43,7 @@ public partial class MainWindow : Window
     private int? _lastTrayPercent;
     private readonly List<double> _memoryHistory = [];
     private bool _refreshing;
+    private bool _processesStale;
     private bool _cleaning;
     private bool _forceExit;
     private DateTime _lastAutoCleanUtc = DateTime.MinValue;
@@ -222,16 +223,18 @@ public partial class MainWindow : Window
         _refreshing = true;
         try
         {
+            bool includeProcesses = IsVisible && WindowState != WindowState.Minimized;
             var result = await Task.Run(() =>
             {
                 var usage = _monitor.ReadMemory();
+                if (!includeProcesses)
+                    return (Usage: usage, Groups: (IReadOnlyList<ProcessGroupUsage>?)null, TotalProcesses: 0);
+
                 var snapshot = _monitor.ReadProcesses();
                 var decorated = _processIcons.Decorate(snapshot);
-                return (usage, ProcessGrouping.Build(decorated), snapshot.Count);
+                return (Usage: usage, Groups: (IReadOnlyList<ProcessGroupUsage>?)ProcessGrouping.Build(decorated), TotalProcesses: snapshot.Count);
             });
-            var memory = result.Item1;
-            var groups = result.Item2;
-            var totalProcesses = result.Item3;
+            var memory = result.Usage;
 
             UsedText.Text = Format.Bytes(memory.Used);
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
@@ -247,7 +250,15 @@ public partial class MainWindow : Window
             CommitText.Text = Format.Bytes(memory.Committed);
             LimitText.Text = Format.Bytes(memory.CommitLimit);
 
-            ApplyProcessSnapshot(groups, totalProcesses);
+            if (result.Groups is not null)
+            {
+                _processesStale = false;
+                ApplyProcessSnapshot(result.Groups, result.TotalProcesses);
+            }
+            else
+            {
+                _processesStale = true;
+            }
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean &&
@@ -756,6 +767,7 @@ public partial class MainWindow : Window
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
+        if (_processesStale) _ = RefreshAsync();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -766,6 +778,8 @@ public partial class MainWindow : Window
     {
         if (WindowState == WindowState.Minimized && _settings.MinimizeToTray && _tray is not null)
             Hide();
+        else if (WindowState != WindowState.Minimized && IsVisible && _processesStale)
+            _ = RefreshAsync();
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

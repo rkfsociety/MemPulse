@@ -70,8 +70,18 @@ internal static class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool CloseHandle(IntPtr handle);
 
+    internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int pid);
+
+    [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool QueryFullProcessImageName(
+        IntPtr processHandle,
+        uint flags,
+        [Out] char[] exeName,
+        ref uint size);
 
     [DllImport("kernel32.dll", EntryPoint = "K32EmptyWorkingSet", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

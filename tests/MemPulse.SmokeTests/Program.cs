@@ -126,4 +126,26 @@ finally
     if (Directory.Exists(settingsDirectory)) Directory.Delete(settingsDirectory, true);
 }
 
+var groupSnapshot = new ProcessSnapshotCollection<ProcessGroupUsage>(ProcessGrouping.SnapshotComparer);
+int groupResets = 0;
+groupSnapshot.CollectionChanged += (_, args) =>
+{
+    if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        groupResets++;
+};
+groupSnapshot.ReplaceWith([
+    new ProcessGroupUsage("Alpha", [new ProcessUsage(1, "Alpha", 1000, 500)], 1000, 500, null, 100.0),
+    new ProcessGroupUsage("Beta", [new ProcessUsage(2, "Beta", 500, 200)], 500, 200, null, 50.0)
+]);
+groupSnapshot.ReplaceWith([
+    new ProcessGroupUsage("Alpha", [new ProcessUsage(1, "Alpha", 1000, 500)], 1000, 500, null, 100.0),
+    new ProcessGroupUsage("Beta", [new ProcessUsage(2, "Beta", 500, 200)], 500, 200, null, 50.2)
+]);
+Assert(groupResets == 1, "sub-percent RelativeLoad jitter and new Members arrays do not reset UI collection");
+groupSnapshot.ReplaceWith([
+    new ProcessGroupUsage("Alpha", [new ProcessUsage(1, "Alpha", 1000, 500)], 1000, 500, null, 100.0),
+    new ProcessGroupUsage("Beta", [new ProcessUsage(2, "Beta", 550, 200)], 550, 200, null, 55.0)
+]);
+Assert(groupResets == 2, "meaningful group change triggers UI collection reset");
+
 Console.WriteLine("All smoke tests passed.");

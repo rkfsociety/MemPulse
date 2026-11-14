@@ -30,6 +30,38 @@ public enum ProcessSortOrder
 
 public static class ProcessGrouping
 {
+    /// <summary>
+    /// Compares process group snapshots for UI updates without triggering full collection resets
+    /// on new Members array instances or sub-percent RelativeLoad fluctuations.
+    /// </summary>
+    public static IEqualityComparer<ProcessGroupUsage> SnapshotComparer { get; } = new ProcessGroupSnapshotComparer();
+
+    private sealed class ProcessGroupSnapshotComparer : IEqualityComparer<ProcessGroupUsage>
+    {
+        public bool Equals(ProcessGroupUsage? x, ProcessGroupUsage? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+            if (x.WorkingBytes != y.WorkingBytes ||
+                x.PrivateBytes != y.PrivateBytes ||
+                x.Members.Count != y.Members.Count ||
+                !string.Equals(x.Name, y.Name, StringComparison.Ordinal) ||
+                (x.IconBytes is null) != (y.IconBytes is null) ||
+                Math.Abs(x.RelativeLoad - y.RelativeLoad) >= 0.5)
+                return false;
+
+            for (int i = 0; i < x.Members.Count; i++)
+            {
+                if (x.Members[i].Pid != y.Members[i].Pid)
+                    return false;
+            }
+            return true;
+        }
+
+        public int GetHashCode(ProcessGroupUsage obj) =>
+            HashCode.Combine(obj.Name, obj.WorkingBytes, obj.PrivateBytes, obj.Members.Count);
+    }
+
     /// <summary>Stable, predictable ordering for the process dashboard.</summary>
     public static IReadOnlyList<ProcessGroupUsage> Sort(
         IReadOnlyList<ProcessGroupUsage> groups, ProcessSortOrder order) =>

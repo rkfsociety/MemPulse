@@ -10,6 +10,7 @@ public sealed class CleanupService
     private const uint TokenAdjustPrivileges = 0x20, TokenQuery = 0x08, SePrivilegeEnabled = 0x02;
     private const uint ProcessSetQuota = 0x0100, ProcessQueryLimitedInformation = 0x1000;
     private const int SystemMemoryListInformation = 80;
+    public static readonly TimeSpan DefaultHelperTimeout = TimeSpan.FromSeconds(30);
 
     public static bool IsElevated
     {
@@ -20,7 +21,10 @@ public sealed class CleanupService
         }
     }
 
-    public CleanupReport Clean(CleanupOptions options)
+    public CleanupReport Clean(
+        CleanupOptions options,
+        TimeSpan? helperTimeout = null,
+        CancellationToken cancellationToken = default)
     {
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
         {
@@ -31,13 +35,23 @@ public sealed class CleanupService
         if (IsElevated) return CleanElevated(options);
         var args = "--clean-cache" + (options.Standby ? " --standby" : "") +
             (options.WorkingSets ? " --workingsets" : "") + (options.ModifiedPages ? " --modified" : "");
-        return RunHelper(args, "Очистка памяти");
+        return RunHelper(args, "Очистка памяти", helperTimeout, cancellationToken);
     }
 
-    // Запускает короткий экземпляр MemPulse с правами администратора (UAC) и ждёт его завершения.
-    private static CleanupReport RunHelper(string args, string label)
+    // Запускает короткий экземпляр MemPulse с правами администратора (UAC) и ждёт его завершения с таймаутом.
+    private static CleanupReport RunHelper(
+        string args,
+        string label,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
     {
         var report = new CleanupReport();
+        if (cancellationToken.IsCancellationRequested)
+        {
+            report.Steps.Add(new CleanupStep(label, false, "Операция отменена."));
+            return report;
+        }
+
         try
         {
             var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не найден исполняемый файл.");
@@ -52,7 +66,25 @@ public sealed class CleanupService
                 report.Steps.Add(new CleanupStep(label, false, "Не удалось запустить помощник."));
                 return report;
             }
-            proc.WaitForExit();
+
+            var effectiveTimeout = timeout ?? DefaultHelperTimeout;
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (effectiveTimeout > TimeSpan.Zero && effectiveTimeout != Timeout.InfiniteTimeSpan)
+                cts.CancelAfter(effectiveTimeout);
+
+            try
+            {
+                proc.WaitForExitAsync(cts.Token).GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                string reason = cancellationToken.IsCancellationRequested
+                    ? "Операция отменена."
+                    : $"Превышено время ожидания помощника UAC ({(int)Math.Ceiling(effectiveTimeout.TotalSeconds)} сек.).";
+                report.Steps.Add(new CleanupStep(label, false, reason));
+                return report;
+            }
+
             bool ok = proc.ExitCode == 0;
             report.Steps.Add(new CleanupStep(label, ok, ok ? "Выполнено помощником с правами администратора." : "Помощник завершился с кодом " + proc.ExitCode + "."));
         }
@@ -109,8 +141,13 @@ public sealed class CleanupService
         return report;
     }
 
-    public CleanupReport TrimProcess(int pid) =>
-        pid > 0 && !IsElevated ? RunHelper("--trim-process " + pid, "Процесс " + pid) : TrimProcessDirect(pid);
+    public CleanupReport TrimProcess(
+        int pid,
+        TimeSpan? helperTimeout = null,
+        CancellationToken cancellationToken = default) =>
+        pid > 0 && !IsElevated
+            ? RunHelper("--trim-process " + pid, "Процесс " + pid, helperTimeout, cancellationToken)
+            : TrimProcessDirect(pid);
     private CleanupReport TrimProcessDirect(int pid)
     {
         var report = new CleanupReport();

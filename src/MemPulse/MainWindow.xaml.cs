@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private readonly MonitoringService _monitor = new();
     private readonly ProcessIconCache _processIcons = new();
     private readonly CleanupService _cleaner = new();
-    private readonly SettingsStore _store = new();
+    private readonly SettingsStore _store = new(onLoadError: StartupLog.Warn);
     private readonly UpdateService _updates = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
     private AvailableUpdate? _availableUpdate;
@@ -262,9 +262,12 @@ public partial class MainWindow : Window
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean &&
-                memory.UsedPercent >= _settings.AutoCleanThreshold &&
-                DateTime.UtcNow - _lastAutoCleanUtc >=
-                    TimeSpan.FromMinutes(_settings.AutoCleanCooldownMinutes))
+                AutoCleanupPolicy.ShouldClean(
+                    memory.UsedPercent,
+                    _settings.AutoCleanThreshold,
+                    _settings.AutoCleanCooldownMinutes,
+                    DateTime.UtcNow,
+                    _lastAutoCleanUtc))
             {
                 // The automatic mode deliberately excludes more disruptive cleanup operations.
                 _lastAutoCleanUtc = DateTime.UtcNow;
@@ -486,6 +489,11 @@ public partial class MainWindow : Window
     private async Task RunCleanupAsync(CleanupOptions options, bool automatic)
     {
         if (_cleaning) return;
+        if (automatic && !CleanupService.IsElevated)
+        {
+            SetStatus("Автоочистка пропущена: требуются права администратора (запустите от имени администратора или через Планировщик задач).");
+            return;
+        }
         _cleaning = true;
         CleanButton.IsEnabled = false;
         TrimButton.IsEnabled = false;
@@ -558,7 +566,35 @@ public partial class MainWindow : Window
         MinimizeCheck.IsChecked = _settings.MinimizeToTray;
         CloseCheck.IsChecked = _settings.CloseToTray;
         UpdateCheck.IsChecked = _settings.CheckForUpdates;
+        UpdateAutoCleanElevationHint();
         SettingsStatusText.Text = "Изменения вступят в силу после сохранения.";
+    }
+
+    private void AutoCleanCheck_Changed(object sender, RoutedEventArgs e) =>
+        UpdateAutoCleanElevationHint();
+
+    private void UpdateAutoCleanElevationHint()
+    {
+        if (CleanupService.IsElevated)
+        {
+            AutoCleanElevationHint.Text = "Права администратора активны — автоочистка выполняется тихо без запросов UAC.";
+            AutoCleanElevationHint.Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush");
+            return;
+        }
+
+        if (AutoCleanCheck.IsChecked == true)
+        {
+            AutoCleanElevationHint.Text =
+                "Внимание: приложение запущено без прав администратора. Автоочистка в фоне будет пропущена, чтобы не вызывать окна UAC. Запустите MemPulse от имени администратора или настройте задачу с наивысшими правами в Планировщике задач.";
+            AutoCleanElevationHint.Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B));
+        }
+        else
+        {
+            AutoCleanElevationHint.Text =
+                "Автоочистка выполняется только с правами администратора (запуск от имени администратора или Планировщик задач).";
+            AutoCleanElevationHint.Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush");
+        }
     }
 
     private void CancelSettings_Click(object sender, RoutedEventArgs e)

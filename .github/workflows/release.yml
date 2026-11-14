@@ -108,17 +108,17 @@ jobs:
       - name: Smoke tests
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
-        run: dotnet run --project tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
+        run: dotnet test tests/MemPulse.SmokeTests/MemPulse.SmokeTests.csproj --configuration Release
 
       - name: Linux core smoke tests
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
-        run: dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj --configuration Release
+        run: dotnet test tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj --configuration Release
 
       - name: Test brand icon and RAM percentage rendering
         if: steps.version.outputs.publish == 'true'
         shell: pwsh
-        run: dotnet run --project tests/MemPulse.IconTests/MemPulse.IconTests.csproj --configuration Release
+        run: dotnet test tests/MemPulse.IconTests/MemPulse.IconTests.csproj --configuration Release
 
       - name: Publish self-contained executable
         if: steps.version.outputs.publish == 'true'

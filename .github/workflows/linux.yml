@@ -17,7 +17,7 @@ jobs:
       - name: Build Linux desktop app
         run: dotnet build src/MemPulse.Linux/MemPulse.Linux.csproj -c Release --warnaserror
       - name: Run Linux procfs smoke tests
-        run: dotnet run --project tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Release
+        run: dotnet test tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Release
       - name: Smoke test Linux graphical startup under Xvfb
         run: xvfb-run -a dotnet run --project src/MemPulse.Linux/MemPulse.Linux.csproj -c Release -- --startup-smoke-test
       - name: Publish portable Linux builds

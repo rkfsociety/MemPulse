@@ -564,14 +564,14 @@
        <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12" Margin="0,15,0,0">
         <StackPanel>
          <TextBlock Foreground="{StaticResource TextBrush}" Text="Автоочистка" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
-         <CheckBox x:Name="AutoCleanCheck" Content="Очищать кэш ожидания автоматически" Margin="0,0,0,14"/>
+         <CheckBox x:Name="AutoCleanCheck" Content="Очищать кэш ожидания автоматически" Checked="AutoCleanCheck_Changed" Unchecked="AutoCleanCheck_Changed" Margin="0,0,0,14"/>
          <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
           <TextBlock Foreground="{StaticResource TextBrush}" Text="Порог ОЗУ, %" VerticalAlignment="Center"/><TextBox x:Name="ThresholdText" Grid.Column="1" TextAlignment="Center" MaxLength="2"/>
          </Grid>
          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
           <TextBlock Foreground="{StaticResource TextBrush}" Text="Пауза, мин." VerticalAlignment="Center"/><TextBox x:Name="CooldownText" Grid.Column="1" TextAlignment="Center" MaxLength="3"/>
          </Grid>
-         <TextBlock Text="Автоочистка выполняется только с правами администратора." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,13,0,0"/>
+         <TextBlock x:Name="AutoCleanElevationHint" Text="Автоочистка выполняется только с правами администратора." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,13,0,0"/>
         </StackPanel>
        </Border>
       </StackPanel>

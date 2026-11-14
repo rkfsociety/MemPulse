@@ -8,12 +8,11 @@
 
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\MemPulse.Core\MemPulse.Core.csproj" />
     <PackageReference Include="Avalonia" Version="12.1.6" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
     <None Include="../MemPulse/Assets/MemPulse.png" Link="MemPulse.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="../../scripts/install-linux.sh" Link="install.sh" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Compile Include="../MemPulse/Core/Models.cs" Link="Core/Models.cs" />
-    <Compile Include="../MemPulse/Core/ProcessGrouping.cs" Link="Core/ProcessGrouping.cs" />
   </ItemGroup>
 </Project>

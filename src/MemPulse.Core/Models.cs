@@ -74,8 +74,8 @@ public sealed class AppSettings
     {
         var result = settings ?? new AppSettings();
         result.RefreshSeconds = Math.Clamp(result.RefreshSeconds, 1, 10);
-        result.AutoCleanThreshold = Math.Clamp(result.AutoCleanThreshold, 70, 98);
-        result.AutoCleanCooldownMinutes = Math.Clamp(result.AutoCleanCooldownMinutes, 5, 120);
+        result.AutoCleanThreshold = Math.Clamp(result.AutoCleanThreshold, AutoCleanupPolicy.MinThreshold, AutoCleanupPolicy.MaxThreshold);
+        result.AutoCleanCooldownMinutes = Math.Clamp(result.AutoCleanCooldownMinutes, AutoCleanupPolicy.MinCooldownMinutes, AutoCleanupPolicy.MaxCooldownMinutes);
         return result;
     }
 }

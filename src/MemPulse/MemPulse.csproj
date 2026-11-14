@@ -15,6 +15,7 @@
     <ApplicationIcon>Assets\MemPulse.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\MemPulse.Core\MemPulse.Core.csproj" />
     <Resource Include="Assets\MemPulse.ico" />
     <Resource Include="Assets\MemPulse.png" />
   </ItemGroup>

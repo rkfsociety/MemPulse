@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using MemPulse.Core;
 
 namespace MemPulse.Linux;
 
@@ -326,8 +327,7 @@ public static class LinuxAutoCleanupPolicy
 {
     public static bool ShouldClean(double usedPercent, int threshold, DateTimeOffset now,
         DateTimeOffset nextAttempt) =>
-        double.IsFinite(usedPercent) && threshold is >= 70 and <= 98 &&
-        usedPercent >= threshold && now >= nextAttempt;
+        AutoCleanupPolicy.ShouldClean(usedPercent, threshold, now, nextAttempt);
 }
 
 public readonly record struct LinuxMemoryMapping(ulong Address, ulong Length);

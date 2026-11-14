@@ -18,6 +18,9 @@ public sealed class UpdateService
     // Constants
     private const string LatestApi = "https://api.github.com/repos/rkfsociety/MemPulse/releases/latest";
     private const string InstallerName = "MemPulse-Setup-x64.exe";
+    private const string InstallerSha256Name = InstallerName + ".sha256";
+    private const string Sha256SumsName = "SHA256SUMS.txt";
+    private const int MaxChecksumFileBytes = 64 * 1024;
     private const int MaxRetryAttempts = 3;
     private const int BufferSize = 81920;
     private const long MaxInstallerBytes = 100L * 1024 * 1024; // 100 MiB
@@ -85,9 +88,56 @@ public sealed class UpdateService
 
     // Verify asset URL
     public static bool IsExpectedAssetUrl(Uri uri, string tag) =>
+        IsExpectedAssetUrl(uri, tag, InstallerName);
+
+    public static bool IsExpectedAssetUrl(Uri uri, string tag, string assetName) =>
         uri.Scheme == Uri.UriSchemeHttps &&
         uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
-        uri.AbsolutePath.Equals($"/rkfsociety/MemPulse/releases/download/{tag}/{InstallerName}", StringComparison.Ordinal);
+        uri.AbsolutePath.Equals($"/rkfsociety/MemPulse/releases/download/{tag}/{assetName}", StringComparison.Ordinal);
+
+    public static bool TryParseSha256Digest(string? digest, out byte[] sha256)
+    {
+        sha256 = [];
+        if (string.IsNullOrWhiteSpace(digest) ||
+            !Regex.IsMatch(digest, @"^sha256:[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant))
+            return false;
+        sha256 = Convert.FromHexString(digest[7..]);
+        return true;
+    }
+
+    public static bool TryParseSha256Sums(string? content, string assetName, out byte[] sha256)
+    {
+        sha256 = [];
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+
+        foreach (string rawLine in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            // Single-hash .sha256 file (just 64 hex chars)
+            if (Regex.IsMatch(line, @"^[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant))
+            {
+                sha256 = Convert.FromHexString(line);
+                return true;
+            }
+
+            // Standard sha256sum format: "<hex>  <filename>" or "<hex> *<filename>"
+            var match = Regex.Match(line, @"^([a-fA-F0-9]{64})\s+\*?(.+)$", RegexOptions.CultureInvariant);
+            if (!match.Success)
+                continue;
+
+            string fileName = Path.GetFileName(match.Groups[2].Value.Trim());
+            if (string.Equals(fileName, assetName, StringComparison.Ordinal))
+            {
+                sha256 = Convert.FromHexString(match.Groups[1].Value);
+                return true;
+            }
+        }
+        return false;
+    }
 
     // Check for newer release
     public async Task<AvailableUpdate?> CheckAsync(CancellationToken cancellationToken = default)
@@ -113,29 +163,92 @@ public sealed class UpdateService
         if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
             return null;
 
+        Uri? installerUrl = null;
+        string? installerDigest = null;
+        Uri? installerSha256Url = null;
+        Uri? sha256SumsUrl = null;
+
         foreach (var asset in assets.EnumerateArray())
         {
-            if (!string.Equals(asset.GetProperty("name").GetString(), InstallerName, StringComparison.Ordinal))
-                continue;
-
+            string? name = asset.GetProperty("name").GetString();
             string? url = asset.GetProperty("browser_download_url").GetString();
-            string? digest = asset.TryGetProperty("digest", out var d) ? d.GetString() : null;
 
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var installerUrl) ||
-                !IsExpectedAssetUrl(installerUrl, tag!) ||
-                digest is null ||
-                !Regex.IsMatch(digest, @"^sha256:[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant))
-                throw new InvalidDataException("Некорректная ссылка на установщик или контрольная сумма SHA-256 релиза.");
-
-            return new AvailableUpdate(
-                version,
-                tag!,
-                installerUrl,
-                Convert.FromHexString(digest[7..]),
-                new Uri($"https://github.com/rkfsociety/MemPulse/releases/tag/{tag}"));
+            if (string.Equals(name, InstallerName, StringComparison.Ordinal))
+            {
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUrl) ||
+                    !IsExpectedAssetUrl(parsedUrl, tag!, InstallerName))
+                    throw new InvalidDataException("Некорректная ссылка на установщик релиза.");
+                installerUrl = parsedUrl;
+                installerDigest = asset.TryGetProperty("digest", out var d) ? d.GetString() : null;
+            }
+            else if (string.Equals(name, InstallerSha256Name, StringComparison.Ordinal) &&
+                     Uri.TryCreate(url, UriKind.Absolute, out var shaUrl) &&
+                     IsExpectedAssetUrl(shaUrl, tag!, InstallerSha256Name))
+            {
+                installerSha256Url = shaUrl;
+            }
+            else if (string.Equals(name, Sha256SumsName, StringComparison.Ordinal) &&
+                     Uri.TryCreate(url, UriKind.Absolute, out var sumsUrl) &&
+                     IsExpectedAssetUrl(sumsUrl, tag!, Sha256SumsName))
+            {
+                sha256SumsUrl = sumsUrl;
+            }
         }
 
-        return null;
+        if (installerUrl is null)
+            return null;
+
+        byte[] sha256;
+        if (!string.IsNullOrWhiteSpace(installerDigest))
+        {
+            if (!TryParseSha256Digest(installerDigest, out sha256))
+                throw new InvalidDataException("Некорректный формат контрольной суммы SHA-256 в поле digest релиза.");
+        }
+        else
+        {
+            sha256 = await ResolveFallbackSha256Async(installerSha256Url, sha256SumsUrl, cancellationToken);
+        }
+
+        return new AvailableUpdate(
+            version,
+            tag!,
+            installerUrl,
+            sha256,
+            new Uri($"https://github.com/rkfsociety/MemPulse/releases/tag/{tag}"));
+    }
+
+    private static async Task<byte[]> ResolveFallbackSha256Async(
+        Uri? installerSha256Url,
+        Uri? sha256SumsUrl,
+        CancellationToken cancellationToken)
+    {
+        foreach (var candidate in new[] { installerSha256Url, sha256SumsUrl })
+        {
+            if (candidate is null) continue;
+            string text = await DownloadSmallTextAsync(candidate, cancellationToken);
+            if (TryParseSha256Sums(text, InstallerName, out var sha256))
+                return sha256;
+        }
+
+        throw new InvalidDataException(
+            "В релизе отсутствует контрольная сумма SHA-256 (поле digest и файл SHA256SUMS.txt).");
+    }
+
+    private static async Task<string> DownloadSmallTextAsync(Uri url, CancellationToken cancellationToken)
+    {
+        using var response = await ExecuteWithRetryAsync(() =>
+            Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken));
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxChecksumFileBytes)
+            throw new InvalidDataException("Файл контрольной суммы слишком велик.");
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+        char[] buffer = new char[MaxChecksumFileBytes];
+        int read = await reader.ReadBlockAsync(buffer.AsMemory(), cancellationToken);
+        if (!reader.EndOfStream)
+            throw new InvalidDataException("Файл контрольной суммы слишком велик.");
+        return new string(buffer, 0, read);
     }
 
     // Download installer with progress throttling and backup

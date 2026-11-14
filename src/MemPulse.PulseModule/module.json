@@ -1,0 +1,14 @@
+{
+  "id": "mempulse",
+  "name": "MemPulse",
+  "description": "Мониторинг и очистка оперативной памяти, кэша и процессов",
+  "version": "0.2.42",
+  "contractVersion": "1.0",
+  "platforms": [ "windows", "linux" ],
+  "entryAssembly": "MemPulse.PulseModule.dll",
+  "entryType": "MemPulse.PulseModule.MemPulseModule",
+  "helperExecutable": {
+    "windows": "MemPulse.Helper.exe",
+    "linux": "MemPulse.Helper"
+  }
+}

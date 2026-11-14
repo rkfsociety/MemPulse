@@ -8,12 +8,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="PCPulse.Contracts" Version="1.0.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MemPulse.Core\MemPulse.Core.csproj" />
-    <Compile Include="..\..\src\MemPulse\Core\UpdateService.cs" Link="UpdateService.cs" />
-    <Compile Include="..\..\src\MemPulse\Core\StartupLog.cs" Link="StartupLog.cs" />
+    <ProjectReference Include="..\..\src\MemPulse.Helper\MemPulse.Helper.csproj" />
+    <ProjectReference Include="..\..\src\MemPulse.PulseModule\MemPulse.PulseModule.csproj" />
   </ItemGroup>
 </Project>

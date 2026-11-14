@@ -1,5 +1,5 @@
 using MemPulse.Core;
-using MemPulse.Linux;
+using MemPulse.Core.Platform.Linux;
 using Xunit;
 
 namespace MemPulse.LinuxTests;
@@ -92,13 +92,13 @@ CommitLimit:     9500000 kB
     }
 
     [Fact]
-    public void LinuxAutoCleanupPolicy_ValidatesThresholdCooldownAndNaN()
+    public void AutoCleanupPolicy_ValidatesThresholdCooldownAndNaN()
     {
         var now = DateTimeOffset.UtcNow;
-        Assert.True(LinuxAutoCleanupPolicy.ShouldClean(91, 90, now, DateTimeOffset.MinValue));
-        Assert.False(LinuxAutoCleanupPolicy.ShouldClean(89, 90, now, DateTimeOffset.MinValue));
-        Assert.False(LinuxAutoCleanupPolicy.ShouldClean(91, 90, now, now.AddMinutes(5)));
-        Assert.False(LinuxAutoCleanupPolicy.ShouldClean(double.NaN, 90, now, DateTimeOffset.MinValue));
+        Assert.True(AutoCleanupPolicy.ShouldClean(91, 90, now, DateTimeOffset.MinValue));
+        Assert.False(AutoCleanupPolicy.ShouldClean(89, 90, now, DateTimeOffset.MinValue));
+        Assert.False(AutoCleanupPolicy.ShouldClean(91, 90, now, now.AddMinutes(5)));
+        Assert.False(AutoCleanupPolicy.ShouldClean(double.NaN, 90, now, DateTimeOffset.MinValue));
     }
 
     [Fact]
@@ -144,9 +144,9 @@ CommitLimit:     9500000 kB
         try
         {
             string settingsPath = Path.Combine(settingsDirectory, "linux-settings.json");
-            var store = new LinuxSettingsStore(settingsPath);
+            var store = new SettingsStore(settingsPath);
             await Task.WhenAll(Enumerable.Range(0, 24).Select(i => Task.Run(() =>
-                new LinuxSettingsStore(settingsPath).Save(new AppSettings { RefreshSeconds = i % 10 + 1 }))));
+                new SettingsStore(settingsPath).Save(new AppSettings { RefreshSeconds = i % 10 + 1 }))));
 
             Assert.InRange(store.Load().RefreshSeconds, 1, 10);
             Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));

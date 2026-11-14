@@ -5,3 +5,7 @@ obj/
 *.suo
 TestResults/
 *.publish/
+.nuget-local/
+dist/
+publish-*/
+release-artifacts/

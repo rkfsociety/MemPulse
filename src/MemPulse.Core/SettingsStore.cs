@@ -8,6 +8,14 @@ public sealed class SettingsStore
     // Windows can reject overlapping File.Move(overwrite: true) operations even
     // when each writer uses its own unique staging file.
     private static readonly object IoGate = new();
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+    private static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        WriteIndented = true
+    };
     private readonly string _pathName;
     private readonly Action<string, Exception>? _onLoadError;
 
@@ -16,9 +24,23 @@ public sealed class SettingsStore
         "MemPulse",
         "settings.json");
 
+    public static string DefaultLinuxPath
+    {
+        get
+        {
+            string? config = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            if (string.IsNullOrWhiteSpace(config) || !Path.IsPathFullyQualified(config))
+                config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+            return Path.Combine(config, "MemPulse", "linux-settings.json");
+        }
+    }
+
+    public static string DefaultStandalonePath =>
+        OperatingSystem.IsLinux() ? DefaultLinuxPath : DefaultWindowsPath;
+
     public SettingsStore(string? path = null, Action<string, Exception>? onLoadError = null)
     {
-        _pathName = path ?? DefaultWindowsPath;
+        _pathName = path ?? DefaultStandalonePath;
         _onLoadError = onLoadError;
     }
 
@@ -29,7 +51,7 @@ public sealed class SettingsStore
             try
             {
                 if (File.Exists(_pathName))
-                    return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_pathName)));
+                    return AppSettings.Normalize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_pathName), ReadOptions));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
@@ -50,8 +72,7 @@ public sealed class SettingsStore
                 Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
-                File.WriteAllText(temp, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()),
-                    new JsonSerializerOptions { WriteIndented = true }));
+                File.WriteAllText(temp, JsonSerializer.Serialize(AppSettings.Normalize(settings.Copy()), WriteOptions));
                 if (OperatingSystem.IsLinux())
                     File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 File.Move(temp, _pathName, true);

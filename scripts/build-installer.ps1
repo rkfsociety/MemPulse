@@ -13,10 +13,9 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6\\ISCC.exe'
 
 if (-not (Test-Path $compiler)) { Write-Warning "Inno Setup compiler not found at $compiler. Skipping installer build."; exit 0 }
-if (-not (Test-Path $compiler)) { throw 'ISCC.exe not found.' }
 
-if (-not (Test-Path (Join-Path $root 'publish\\MemPulse.exe'))) {
-    throw 'Publish the win‑x64 application to publish/ first.'
+if (-not (Test-Path (Join-Path $root 'publish\MemPulse.exe')) -or -not (Test-Path (Join-Path $root 'publish\MemPulse.Helper.exe'))) {
+    throw 'Publish win-x64 MemPulse.exe and MemPulse.Helper.exe to publish/ first.'
 }
 
 Push-Location (Join-Path $root 'installer')

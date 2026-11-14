@@ -14,25 +14,46 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Build Linux desktop app
-        run: dotnet build src/MemPulse.Linux/MemPulse.Linux.csproj -c Release --warnaserror
-      - name: Run Linux procfs smoke tests
-        run: dotnet test tests/MemPulse.LinuxTests/MemPulse.LinuxTests.csproj -c Release
+
+      - name: Install Linux runtime dependencies for Avalonia & zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libx11-6 libice6 libsm6 libfontconfig1 xvfb zip
+
+      - name: Fetch PCPulse.Contracts NuGet package
+        run: bash ./scripts/fetch-contracts.sh
+
+      - name: Build solution
+        run: dotnet build MemPulse.sln -c Release --warnaserror
+
+      - name: Run unit and security tests
+        run: dotnet test MemPulse.sln -c Release --no-build
+
       - name: Smoke test Linux graphical startup under Xvfb
-        run: xvfb-run -a dotnet run --project src/MemPulse.Linux/MemPulse.Linux.csproj -c Release -- --startup-smoke-test
-      - name: Publish portable Linux builds
+        run: xvfb-run -a dotnet run --project src/MemPulse/MemPulse.csproj -c Release -- --startup-smoke-test
+
+      - name: Publish standalone Linux builds and PCPulse modules
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           for rid in linux-x64 linux-arm64; do
-            dotnet publish src/MemPulse.Linux/MemPulse.Linux.csproj -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "publish/$rid"
-            chmod +x "publish/$rid/MemPulse.Linux"
+            rm -rf "publish/$rid"
+            dotnet publish src/MemPulse/MemPulse.csproj -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "publish/$rid"
+            dotnet publish src/MemPulse.Helper/MemPulse.Helper.csproj -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o "publish/$rid"
+            cp scripts/install-linux.sh "publish/$rid/install.sh"
+            chmod +x "publish/$rid/MemPulse" "publish/$rid/MemPulse.Helper" "publish/$rid/install.sh"
             tar -czf "dist/MemPulse-$rid.tar.gz" -C "publish/$rid" .
+            bash ./scripts/package-module.sh "$rid" dist
           done
+
+      - name: Smoke test published linux-x64 binary under Xvfb
+        run: xvfb-run -a ./publish/linux-x64/MemPulse --startup-smoke-test
+
       - name: Upload Linux packages
         uses: actions/upload-artifact@v7
         with:
           name: MemPulse-Linux
-          path: dist/MemPulse-linux-*.tar.gz
-
+          path: |
+            dist/MemPulse-linux-*.tar.gz
+            dist/mempulse-module-*

@@ -1,0 +1,74 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+namespace MemPulse.Core.Platform.Windows;
+
+public sealed class WindowsMemoryMonitorService : IMemoryMonitorService
+{
+    private static readonly uint MEMORYSTATUSEX_SIZE = (uint)Marshal.SizeOf<WindowsNative.MEMORYSTATUSEX>();
+    private static readonly uint PERFORMANCE_INFORMATION_SIZE = (uint)Marshal.SizeOf<WindowsNative.PERFORMANCE_INFORMATION>();
+
+    public MemoryUsage ReadMemory()
+    {
+        if (!OperatingSystem.IsWindows())
+            return new MemoryUsage(0, 0, 0, 0, 0);
+
+        var status = new WindowsNative.MEMORYSTATUSEX { Length = MEMORYSTATUSEX_SIZE };
+        if (!WindowsNative.GlobalMemoryStatusEx(ref status))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Не удалось получить сведения об оперативной памяти.");
+
+        ulong cache = 0, committed = 0, commitLimit = 0;
+        if (WindowsNative.GetPerformanceInfo(out var info, PERFORMANCE_INFORMATION_SIZE))
+        {
+            cache = (ulong)info.SystemCache * (ulong)info.PageSize;
+            committed = (ulong)info.CommitTotal * (ulong)info.PageSize;
+            commitLimit = (ulong)info.CommitLimit * (ulong)info.PageSize;
+        }
+
+        ulong swapTotal = status.TotalPageFile > status.TotalPhysical
+            ? status.TotalPageFile - status.TotalPhysical
+            : 0;
+        ulong physicalUsed = status.TotalPhysical >= status.AvailablePhysical
+            ? status.TotalPhysical - status.AvailablePhysical
+            : 0;
+        ulong swapUsed = swapTotal > 0 && committed > physicalUsed
+            ? Math.Min(swapTotal, committed - physicalUsed)
+            : 0;
+
+        return new MemoryUsage(status.TotalPhysical, status.AvailablePhysical, cache, committed, commitLimit, swapTotal, swapUsed);
+    }
+
+    public IReadOnlyList<ProcessUsage> ReadProcesses()
+    {
+        if (!OperatingSystem.IsWindows())
+            return [];
+
+        var rows = new List<ProcessUsage>();
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                try
+                {
+                    var pid = process.Id;
+                    var name = process.ProcessName;
+                    var working = process.WorkingSet64;
+                    var privateBytes = process.PrivateMemorySize64;
+                    rows.Add(new ProcessUsage(pid, name, working, privateBytes));
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+                {
+                    // Protected and terminating processes cannot always be inspected.
+                }
+            }
+        }
+
+        rows.Sort((a, b) =>
+        {
+            int cmp = b.WorkingBytes.CompareTo(a.WorkingBytes);
+            return cmp != 0 ? cmp : string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+        });
+        return rows;
+    }
+}

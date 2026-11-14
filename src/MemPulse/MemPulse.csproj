@@ -1,22 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MemPulse</AssemblyName>
     <RootNamespace>MemPulse</RootNamespace>
-
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <StartupObject>MemPulse.Program</StartupObject>
     <ApplicationIcon>Assets\MemPulse.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="PCPulse.Contracts" Version="1.0.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\MemPulse.Core\MemPulse.Core.csproj" />
-    <Resource Include="Assets\MemPulse.ico" />
-    <Resource Include="Assets\MemPulse.png" />
+    <ProjectReference Include="..\MemPulse.PulseModule\MemPulse.PulseModule.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\MemPulse.ico" />
+    <AvaloniaResource Include="Assets\MemPulse.png" />
+    <None Include="Assets\MemPulse.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

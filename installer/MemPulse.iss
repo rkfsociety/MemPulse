@@ -36,6 +36,7 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Files]
 Source: "..\publish\MemPulse.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\MemPulse.Helper.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\MemPulse"; Filename: "{app}\{#AppExeName}"

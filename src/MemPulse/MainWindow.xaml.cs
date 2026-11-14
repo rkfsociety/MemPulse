@@ -2,15 +2,20 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using MemPulse.Core;
 using Forms = System.Windows.Forms;
 
 using Button = System.Windows.Controls.Button;
+using ButtonBase = System.Windows.Controls.Primitives.ButtonBase;
 using DataGrid = System.Windows.Controls.DataGrid;
+using ScrollBar = System.Windows.Controls.Primitives.ScrollBar;
 using Window = System.Windows.Window;
 using MessageBox = System.Windows.MessageBox;
 
@@ -59,20 +64,38 @@ public partial class MainWindow : Window
     private const uint ModControl = 0x0002;
     private const uint ModNoRepeat = 0x4000;
     private const uint VkM = 0x4D;
+    private bool _syncingGroupSort;
+
+    private sealed record GroupSortOption(string Label, string MemberPath, ListSortDirection Direction)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static readonly GroupSortOption[] GroupSortOptions =
+    [
+        new("ОЗУ · по убыванию", nameof(ProcessGroupUsage.WorkingBytes), ListSortDirection.Descending),
+        new("ОЗУ · по возрастанию", nameof(ProcessGroupUsage.WorkingBytes), ListSortDirection.Ascending),
+        new("Частная · по убыванию", nameof(ProcessGroupUsage.PrivateBytes), ListSortDirection.Descending),
+        new("Частная · по возрастанию", nameof(ProcessGroupUsage.PrivateBytes), ListSortDirection.Ascending),
+        new("Процессов · по убыванию", nameof(ProcessGroupUsage.Count), ListSortDirection.Descending),
+        new("Процессов · по возрастанию", nameof(ProcessGroupUsage.Count), ListSortDirection.Ascending),
+        new("Имя · А–Я", nameof(ProcessGroupUsage.Name), ListSortDirection.Ascending),
+        new("Имя · Я–А", nameof(ProcessGroupUsage.Name), ListSortDirection.Descending)
+    ];
 
     public MainWindow()
     {
         InitializeComponent();
         _overviewView = new ListCollectionView(_groups);
         _detailView = new ListCollectionView(_groups);
-        _overviewView.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.WorkingBytes),
-            ListSortDirection.Descending));
-        _detailView.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.WorkingBytes),
-            ListSortDirection.Descending));
         _overviewView.Filter = FilterProcess;
         _detailView.Filter = FilterGroup;
         ProcessGrid.ItemsSource = _overviewView;
         GroupGrid.ItemsSource = _detailView;
+        GroupSortCombo.ItemsSource = GroupSortOptions;
+        GroupSortCombo.DisplayMemberPath = nameof(GroupSortOption.Label);
+        ApplyGridSort(ProcessGrid, _overviewView, nameof(ProcessGroupUsage.WorkingBytes), ListSortDirection.Descending);
+        ApplyGridSort(GroupGrid, _detailView, nameof(ProcessGroupUsage.WorkingBytes), ListSortDirection.Descending);
         ActivateSection(Section.Overview);
         _timer.Tick += async (_, _) => await RefreshAsync();
         _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
@@ -419,6 +442,102 @@ public partial class MainWindow : Window
     private void ProcessGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateTrimButton();
 
+    private void ApplyGridSort(DataGrid grid, ListCollectionView view, string memberPath, ListSortDirection direction)
+    {
+        view.SortDescriptions.Clear();
+        view.SortDescriptions.Add(new SortDescription(memberPath, direction));
+        if (!string.Equals(memberPath, nameof(ProcessGroupUsage.WorkingBytes), StringComparison.Ordinal))
+            view.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.WorkingBytes), ListSortDirection.Descending));
+        if (!string.Equals(memberPath, nameof(ProcessGroupUsage.Name), StringComparison.Ordinal))
+            view.SortDescriptions.Add(new SortDescription(nameof(ProcessGroupUsage.Name), ListSortDirection.Ascending));
+
+        foreach (var column in grid.Columns)
+            column.SortDirection = string.Equals(column.SortMemberPath, memberPath, StringComparison.Ordinal)
+                ? direction : null;
+
+        if (ReferenceEquals(grid, GroupGrid))
+        {
+            _syncingGroupSort = true;
+            try
+            {
+                GroupSortCombo.SelectedItem = GroupSortOptions.FirstOrDefault(o =>
+                    string.Equals(o.MemberPath, memberPath, StringComparison.Ordinal) && o.Direction == direction);
+            }
+            finally { _syncingGroupSort = false; }
+        }
+    }
+
+    private void HandleGridSorting(DataGrid grid, ListCollectionView view, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+        string? memberPath = e.Column.SortMemberPath;
+        if (string.IsNullOrEmpty(memberPath)) return;
+
+        var nextDirection = e.Column.SortDirection switch
+        {
+            ListSortDirection.Descending => ListSortDirection.Ascending,
+            ListSortDirection.Ascending => ListSortDirection.Descending,
+            _ => string.Equals(memberPath, nameof(ProcessGroupUsage.Name), StringComparison.Ordinal)
+                ? ListSortDirection.Ascending
+                : ListSortDirection.Descending
+        };
+        ApplyGridSort(grid, view, memberPath, nextDirection);
+    }
+
+    private void ProcessGrid_Sorting(object sender, DataGridSortingEventArgs e) =>
+        HandleGridSorting(ProcessGrid, _overviewView, e);
+
+    private void GroupGrid_Sorting(object sender, DataGridSortingEventArgs e) =>
+        HandleGridSorting(GroupGrid, _detailView, e);
+
+    private void GroupSortCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingGroupSort || GroupSortCombo.SelectedItem is not GroupSortOption option) return;
+        ApplyGridSort(GroupGrid, _detailView, option.MemberPath, option.Direction);
+    }
+
+    private static DependencyObject? GetParentElement(DependencyObject node) =>
+        node is Visual or Visual3D
+            ? VisualTreeHelper.GetParent(node)
+            : LogicalTreeHelper.GetParent(node);
+
+    private void GroupGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None) return;
+
+        var current = e.OriginalSource as DependencyObject;
+        while (current is not null && !ReferenceEquals(current, GroupGrid))
+        {
+            // Keep interactions inside expanded details, headers, scrollbars, and buttons intact.
+            if (current is DataGridDetailsPresenter or DataGridColumnHeader or ScrollBar or ButtonBase)
+                return;
+            if (current is DataGridRow row)
+            {
+                if (row.IsSelected)
+                {
+                    GroupGrid.SelectedItem = null;
+                    e.Handled = true;
+                }
+                return;
+            }
+            current = GetParentElement(current);
+        }
+    }
+
+    private void GroupGrid_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape &&
+            GroupGrid.SelectedItem is not null &&
+            Keyboard.FocusedElement is not System.Windows.Controls.TextBox)
+        {
+            GroupGrid.SelectedItem = null;
+            e.Handled = true;
+        }
+    }
+
+    private void CollapseGroup_Click(object sender, RoutedEventArgs e) =>
+        GroupGrid.SelectedItem = null;
+
     private void UpdateTrimButton()
     {
         if (TrimButton is not null)
@@ -429,6 +548,21 @@ public partial class MainWindow : Window
     // Used by the Windows packaged-EXE startup test to exercise real navigation and grouping.
     internal void VerifyProcessRefreshForSmokeTest()
     {
+        foreach (var column in GroupGrid.Columns.OfType<DataGridTemplateColumn>())
+        {
+            if (column.CellTemplate?.LoadContent() is null)
+                throw new InvalidOperationException("Не удалось загрузить шаблон колонки таблицы процессов.");
+        }
+        if (GroupGrid.RowDetailsTemplate?.LoadContent() is null)
+            throw new InvalidOperationException("Не удалось загрузить шаблон раскрытия процессов.");
+        if (DetailWorkingColumn.SortDirection != ListSortDirection.Descending ||
+            GroupSortCombo.SelectedItem is not GroupSortOption
+            {
+                MemberPath: nameof(ProcessGroupUsage.WorkingBytes),
+                Direction: ListSortDirection.Descending
+            })
+            throw new InvalidOperationException("Начальная сортировка таблицы процессов не синхронизирована.");
+
         var first = ProcessGrouping.Build([
             new ProcessUsage(101, "alpha", 4000, 1000),
             new ProcessUsage(102, "ALPHA", 2000, 500),
@@ -448,6 +582,22 @@ public partial class MainWindow : Window
         if ((ProcessGrid.SelectedItem as ProcessGroupUsage)?.Name != "beta" ||
             (GroupGrid.SelectedItem as ProcessGroupUsage)?.Name != "beta")
             throw new InvalidOperationException("Выделение процесса потеряно при обновлении списка.");
+
+        CollapseGroup_Click(this, new RoutedEventArgs());
+        if (GroupGrid.SelectedItem is not null)
+            throw new InvalidOperationException("Сворачивание раскрытой группы процессов не работает.");
+        ApplyProcessSnapshot(updated, 3);
+        if (GroupGrid.SelectedItem is not null)
+            throw new InvalidOperationException("Свёрнутая группа процессов не должна раскрываться после обновления.");
+
+        GroupSortCombo.SelectedItem = GroupSortOptions.Single(o =>
+            o.MemberPath == nameof(ProcessGroupUsage.PrivateBytes) && o.Direction == ListSortDirection.Ascending);
+        if (DetailPrivateColumn.SortDirection != ListSortDirection.Ascending ||
+            DetailWorkingColumn.SortDirection is not null ||
+            (GroupGrid.Items[0] as ProcessGroupUsage)?.Name != "beta")
+            throw new InvalidOperationException("Сортировка через переключатель не обновила таблицу процессов.");
+        GroupSortCombo.SelectedItem = GroupSortOptions[0];
+
         SearchBox.Text = "102";
         ApplyOverviewSearch();
         if (ClearOverviewSearchButton.Visibility != Visibility.Visible ||

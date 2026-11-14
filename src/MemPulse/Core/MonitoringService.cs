@@ -20,7 +20,16 @@ public sealed class MonitoringService
             committed = (ulong)info.CommitTotal * (ulong)info.PageSize;
             commitLimit = (ulong)info.CommitLimit * (ulong)info.PageSize;
         }
-        return new MemoryUsage(status.TotalPhysical, status.AvailablePhysical, cache, committed, commitLimit);
+        ulong swapTotal = status.TotalPageFile > status.TotalPhysical
+            ? status.TotalPageFile - status.TotalPhysical
+            : 0;
+        ulong physicalUsed = status.TotalPhysical >= status.AvailablePhysical
+            ? status.TotalPhysical - status.AvailablePhysical
+            : 0;
+        ulong swapUsed = swapTotal > 0 && committed > physicalUsed
+            ? Math.Min(swapTotal, committed - physicalUsed)
+            : 0;
+        return new MemoryUsage(status.TotalPhysical, status.AvailablePhysical, cache, committed, commitLimit, swapTotal, swapUsed);
     }
 
     public IReadOnlyList<ProcessUsage> ReadProcesses()

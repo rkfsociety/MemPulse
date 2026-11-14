@@ -11,7 +11,24 @@ public sealed class LinuxProcfs
 
     public LinuxProcfs(string root = "/proc") => _root = root;
 
-    public MemoryUsage ReadMemory() => ParseMemInfo(File.ReadAllText(Path.Combine(_root, "meminfo")));
+    public MemoryUsage ReadMemory()
+    {
+        var memory = ParseMemInfo(File.ReadAllText(Path.Combine(_root, "meminfo")));
+        string swapsPath = Path.Combine(_root, "swaps");
+        if (File.Exists(swapsPath))
+        {
+            try
+            {
+                var (zramTotal, zramUsed) = ParseProcSwapsZram(File.ReadAllText(swapsPath));
+                return memory with { ZramTotal = zramTotal, ZramUsed = zramUsed };
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // /proc/swaps may be unavailable in restricted containers.
+            }
+        }
+        return memory;
+    }
 
     public IReadOnlyList<ProcessUsage> ReadProcesses()
     {
@@ -73,6 +90,7 @@ public sealed class LinuxProcfs
         ArgumentNullException.ThrowIfNull(text);
         ulong memTotal = 0, memAvailable = 0, memFree = 0, buffers = 0;
         ulong cached = 0, sReclaimable = 0, committedAs = 0, commitLimit = 0;
+        ulong swapTotal = 0, swapFree = 0;
         bool hasMemAvailable = false;
 
         foreach (ReadOnlySpan<char> line in text.AsSpan().EnumerateLines())
@@ -96,6 +114,8 @@ public sealed class LinuxProcfs
                 case "SReclaimable": sReclaimable = bytes; break;
                 case "Committed_AS": committedAs = bytes; break;
                 case "CommitLimit": commitLimit = bytes; break;
+                case "SwapTotal": swapTotal = bytes; break;
+                case "SwapFree": swapFree = bytes; break;
             }
         }
 
@@ -103,8 +123,48 @@ public sealed class LinuxProcfs
         ulong available = hasMemAvailable ? memAvailable :
             SaturatingAdd(SaturatingAdd(memFree, buffers), cached);
         ulong cache = SaturatingAdd(cached, sReclaimable);
+        ulong swapUsed = swapTotal >= swapFree ? swapTotal - swapFree : 0;
         return new MemoryUsage(memTotal, Math.Min(memTotal, available), cache,
-            committedAs, commitLimit);
+            committedAs, commitLimit, swapTotal, swapUsed);
+    }
+
+    public static (ulong ZramTotal, ulong ZramUsed) ParseProcSwapsZram(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ulong total = 0, used = 0;
+        foreach (ReadOnlySpan<char> rawLine in text.AsSpan().EnumerateLines())
+        {
+            var line = rawLine.Trim();
+            if (line.IsEmpty || line.StartsWith("Filename", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Format: Filename Type Size(KiB) Used(KiB) Priority
+            int firstSpace = line.IndexOfAny(' ', '\t');
+            if (firstSpace <= 0) continue;
+            var name = line[..firstSpace];
+            if (!name.Contains("zram", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var rest = line[(firstSpace + 1)..].TrimStart();
+            int secondSpace = rest.IndexOfAny(' ', '\t');
+            if (secondSpace <= 0) continue;
+            rest = rest[(secondSpace + 1)..].TrimStart();
+
+            int thirdSpace = rest.IndexOfAny(' ', '\t');
+            if (thirdSpace <= 0) continue;
+            if (!ulong.TryParse(rest[..thirdSpace], NumberStyles.None, CultureInfo.InvariantCulture, out ulong sizeKiB))
+                continue;
+
+            rest = rest[(thirdSpace + 1)..].TrimStart();
+            int fourthSpace = rest.IndexOfAny(' ', '\t');
+            var usedToken = fourthSpace > 0 ? rest[..fourthSpace] : rest;
+            if (!ulong.TryParse(usedToken, NumberStyles.None, CultureInfo.InvariantCulture, out ulong usedKiB))
+                continue;
+
+            total = SaturatingAdd(total, sizeKiB <= ulong.MaxValue / 1024 ? sizeKiB * 1024 : ulong.MaxValue);
+            used = SaturatingAdd(used, usedKiB <= ulong.MaxValue / 1024 ? usedKiB * 1024 : ulong.MaxValue);
+        }
+        return (total, used);
     }
 
     public static ProcessUsage ParseProcessStatus(int pid, string status)

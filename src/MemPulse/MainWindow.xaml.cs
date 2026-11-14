@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using MemPulse.Core;
 using Forms = System.Windows.Forms;
@@ -47,6 +48,17 @@ public partial class MainWindow : Window
     private bool _cleaning;
     private bool _forceExit;
     private DateTime _lastAutoCleanUtc = DateTime.MinValue;
+    private long? _lastAutoCleanFreedBytes;
+    private ulong _lastUsedBytes;
+    private readonly CleanupHistoryLog _cleanupHistory = new();
+    private HwndSource? _hwndSource;
+    private bool _hotkeyRegistered;
+    private const int HotkeyId = 0x4D50;
+    private const int WmHotkey = 0x0312;
+    private const uint ModAlt = 0x0001;
+    private const uint ModControl = 0x0002;
+    private const uint ModNoRepeat = 0x4000;
+    private const uint VkM = 0x4D;
 
     public MainWindow()
     {
@@ -124,6 +136,7 @@ public partial class MainWindow : Window
         await RefreshAsync();
         StartupLog.Info("Главное окно: первый опрос завершён");
         ConfigureUpdateTimer();
+        ConfigureGlobalHotkey();
         if (_settings.CheckForUpdates) await CheckUpdatesAsync(false);
         StartupLog.Info("Главное окно: завершено событие Loaded");
     }
@@ -249,6 +262,10 @@ public partial class MainWindow : Window
             CacheText.Text = Format.Bytes(memory.Cache);
             CommitText.Text = Format.Bytes(memory.Committed);
             LimitText.Text = Format.Bytes(memory.CommitLimit);
+            PageFileText.Text = memory.SwapTotal > 0
+                ? $"Файл подкачки: ~{Format.Bytes(memory.SwapUsed)} / {Format.Bytes(memory.SwapTotal)}"
+                : "Файл подкачки: не используется";
+            _lastUsedBytes = memory.Used;
 
             if (result.Groups is not null)
             {
@@ -262,16 +279,20 @@ public partial class MainWindow : Window
             UpdateText.Text = "Обновлено " + DateTime.Now.ToString("HH:mm:ss");
 
             if (_settings.AutoClean &&
-                AutoCleanupPolicy.ShouldClean(
+                AutoCleanupPolicy.ShouldCleanSmart(
                     memory.UsedPercent,
                     _settings.AutoCleanThreshold,
                     _settings.AutoCleanCooldownMinutes,
                     DateTime.UtcNow,
-                    _lastAutoCleanUtc))
+                    _lastAutoCleanUtc,
+                    FullscreenDetector.IsForegroundFullscreen(),
+                    _settings.SkipAutoCleanInFullscreen,
+                    _lastAutoCleanFreedBytes))
             {
                 // The automatic mode deliberately excludes more disruptive cleanup operations.
                 _lastAutoCleanUtc = DateTime.UtcNow;
-                await RunCleanupAsync(new CleanupOptions(true, false, false), true);
+                await RunCleanupAsync(new CleanupOptions(true, false, false, _settings.ExcludedProcesses), true, "Авто");
+                _lastAutoCleanFreedBytes = _cleanupHistory.Latest?.FreedBytes;
             }
         }
         catch (Exception ex)
@@ -471,7 +492,8 @@ public partial class MainWindow : Window
         var options = new CleanupOptions(
             StandbyCheck.IsChecked == true,
             WorkingCheck.IsChecked == true,
-            ModifiedCheck.IsChecked == true);
+            ModifiedCheck.IsChecked == true,
+            _settings.ExcludedProcesses);
         if (!options.Standby && !options.WorkingSets && !options.ModifiedPages)
         {
             SetStatus("Выберите хотя бы одну операцию очистки.");
@@ -486,7 +508,7 @@ public partial class MainWindow : Window
         await RefreshAsync();
     }
 
-    private async Task RunCleanupAsync(CleanupOptions options, bool automatic)
+    private async Task RunCleanupAsync(CleanupOptions options, bool automatic, string? reason = null)
     {
         if (_cleaning) return;
         if (automatic && !CleanupService.IsElevated)
@@ -499,7 +521,27 @@ public partial class MainWindow : Window
         TrimButton.IsEnabled = false;
         try
         {
+            ulong usedBefore = _lastUsedBytes;
+            if (usedBefore == 0)
+            {
+                try { usedBefore = (await Task.Run(() => _monitor.ReadMemory())).Used; }
+                catch { /* best effort */ }
+            }
             var report = await Task.Run(() => _cleaner.Clean(options));
+            ulong usedAfter = usedBefore;
+            try { usedAfter = (await Task.Run(() => _monitor.ReadMemory())).Used; }
+            catch { /* best effort */ }
+
+            string effectiveReason = reason ?? (automatic ? "Авто" : "Вручную");
+            _cleanupHistory.Record(new CleanupHistoryEntry(
+                DateTimeOffset.Now,
+                effectiveReason,
+                usedBefore,
+                usedAfter,
+                report.AnySuccess,
+                report.Summary));
+            CleanupHistoryText.Text = _cleanupHistory.FormatCompact(3);
+
             SetStatus((automatic ? "Автоочистка: " : "Очистка: ") + report.Summary);
         }
         catch (Exception ex)
@@ -529,10 +571,12 @@ public partial class MainWindow : Window
     private async Task TrimProcessAsync(ProcessUsage selected)
     {
         if (_cleaning) return;
-        if (!await ConfirmAsync("Очистка памяти процесса",
-                "Уменьшить рабочий набор процесса " + selected.Name + " (PID " + selected.Pid +
-                ")? Данные могут быть повторно загружены в ОЗУ, а процесс — временно замедлиться.",
-                "Очистить PID"))
+        bool isExcluded = ProcessExclusion.IsExcluded(selected.Name, _settings.ExcludedProcesses);
+        string warning = isExcluded
+            ? $"Процесс {selected.Name} (PID {selected.Pid}) находится в списке исключений. Всё равно уменьшить его рабочий набор?"
+            : "Уменьшить рабочий набор процесса " + selected.Name + " (PID " + selected.Pid +
+              ")? Данные могут быть повторно загружены в ОЗУ, а процесс — временно замедлиться.";
+        if (!await ConfirmAsync("Очистка памяти процесса", warning, "Очистить PID"))
             return;
 
         _cleaning = true;
@@ -566,6 +610,9 @@ public partial class MainWindow : Window
         MinimizeCheck.IsChecked = _settings.MinimizeToTray;
         CloseCheck.IsChecked = _settings.CloseToTray;
         UpdateCheck.IsChecked = _settings.CheckForUpdates;
+        HotkeyCheck.IsChecked = _settings.GlobalHotkeyEnabled;
+        SkipFullscreenCheck.IsChecked = _settings.SkipAutoCleanInFullscreen;
+        ExcludedProcessesText.Text = ProcessExclusion.FormatList(_settings.ExcludedProcesses);
         UpdateAutoCleanElevationHint();
         SettingsStatusText.Text = "Изменения вступят в силу после сохранения.";
     }
@@ -623,7 +670,10 @@ public partial class MainWindow : Window
             StartWithWindows = StartupCheck.IsChecked == true,
             MinimizeToTray = MinimizeCheck.IsChecked == true,
             CloseToTray = CloseCheck.IsChecked == true,
-            CheckForUpdates = UpdateCheck.IsChecked == true
+            CheckForUpdates = UpdateCheck.IsChecked == true,
+            GlobalHotkeyEnabled = HotkeyCheck.IsChecked == true,
+            SkipAutoCleanInFullscreen = SkipFullscreenCheck.IsChecked == true,
+            ExcludedProcesses = ProcessExclusion.ParseList(ExcludedProcessesText.Text)
         };
         try
         {
@@ -632,6 +682,7 @@ public partial class MainWindow : Window
             _settings = next;
             ConfigureTimer();
             ConfigureUpdateTimer();
+            ConfigureGlobalHotkey();
             UpdateAutomationSummary();
             LoadSettingsControls();
             SettingsStatusText.Text = "Настройки сохранены.";
@@ -749,11 +800,10 @@ public partial class MainWindow : Window
         };
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Открыть MemPulse", null, (_, _) => Dispatcher.BeginInvoke(new Action(ShowFromTray)));
-        menu.Items.Add("Очистить кэш ожидания", null, (_, _) => Dispatcher.BeginInvoke(
+        menu.Items.Add("Очистить сейчас", null, (_, _) => Dispatcher.BeginInvoke(
             new Action(async () =>
             {
-                ShowFromTray();
-                await RunCleanupAsync(new CleanupOptions(true, false, false), false);
+                await RunCleanupAsync(BuildSelectedCleanupOptions(fallbackToStandby: true), false, "Трей");
                 await RefreshAsync();
             })));
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -831,6 +881,12 @@ public partial class MainWindow : Window
         _updateTimer.Stop();
         _overviewSearchTimer.Stop();
         _detailSearchTimer.Stop();
+        UnregisterGlobalHotkey();
+        if (_hwndSource is not null)
+        {
+            _hwndSource.RemoveHook(WndProc);
+            _hwndSource = null;
+        }
         if (_tray is not null)
         {
             _tray.Visible = false;
@@ -974,4 +1030,111 @@ public partial class MainWindow : Window
     }
 
     private void SetStatus(string text) => StatusText.Text = text;
+
+    private CleanupOptions BuildSelectedCleanupOptions(bool fallbackToStandby = false)
+    {
+        bool standby = StandbyCheck.IsChecked == true;
+        bool working = WorkingCheck.IsChecked == true;
+        bool modified = ModifiedCheck.IsChecked == true;
+        if (fallbackToStandby && !standby && !working && !modified)
+            standby = true;
+        return new CleanupOptions(standby, working, modified, _settings.ExcludedProcesses);
+    }
+
+    private void ConfigureGlobalHotkey()
+    {
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        if (_hwndSource is null)
+        {
+            _hwndSource = HwndSource.FromHwnd(handle);
+            _hwndSource?.AddHook(WndProc);
+        }
+
+        UnregisterGlobalHotkey();
+        if (!_settings.GlobalHotkeyEnabled)
+            return;
+
+        _hotkeyRegistered = Native.RegisterHotKey(handle, HotkeyId, ModControl | ModAlt | ModNoRepeat, VkM);
+        if (!_hotkeyRegistered)
+            StartupLog.Warn("Не удалось зарегистрировать глобальную горячую клавишу Ctrl+Alt+M (возможно, занята другим приложением).");
+    }
+
+    private void UnregisterGlobalHotkey()
+    {
+        if (!_hotkeyRegistered) return;
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero)
+            Native.UnregisterHotKey(handle, HotkeyId);
+        _hotkeyRegistered = false;
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WmHotkey && wParam.ToInt32() == HotkeyId)
+        {
+            handled = true;
+            Dispatcher.BeginInvoke(new Action(async () =>
+            {
+                await RunCleanupAsync(BuildSelectedCleanupOptions(fallbackToStandby: true), false, "Хоткей");
+                await RefreshAsync();
+            }));
+        }
+        return IntPtr.Zero;
+    }
+
+    private void ProcessGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) =>
+        UpdateExcludeMenuItem(ProcessGrid.SelectedItem as ProcessGroupUsage, OverviewExcludeMenuItem, e);
+
+    private void GroupGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) =>
+        UpdateExcludeMenuItem(GroupGrid.SelectedItem as ProcessGroupUsage, DetailExcludeMenuItem, e);
+
+    private void UpdateExcludeMenuItem(ProcessGroupUsage? group, MenuItem item, ContextMenuEventArgs e)
+    {
+        if (group is null)
+        {
+            e.Handled = true;
+            return;
+        }
+        bool excluded = ProcessExclusion.IsExcluded(group.Name, _settings.ExcludedProcesses);
+        item.Header = excluded
+            ? $"Убрать «{group.DisplayName}» из исключений"
+            : $"Добавить «{group.DisplayName}» в исключения";
+    }
+
+    private void ToggleExcludeOverview_Click(object sender, RoutedEventArgs e) =>
+        ToggleProcessExclusion(ProcessGrid.SelectedItem as ProcessGroupUsage);
+
+    private void ToggleExcludeDetail_Click(object sender, RoutedEventArgs e) =>
+        ToggleProcessExclusion(GroupGrid.SelectedItem as ProcessGroupUsage);
+
+    private void ToggleProcessExclusion(ProcessGroupUsage? group)
+    {
+        if (group is null) return;
+        string normalized = ProcessExclusion.NormalizeName(group.Name);
+        if (normalized.Length == 0) return;
+
+        var list = ProcessExclusion.NormalizeList(_settings.ExcludedProcesses);
+        bool removed = list.RemoveAll(item => item.Equals(normalized, StringComparison.OrdinalIgnoreCase)) > 0;
+        if (!removed)
+            list.Add(normalized);
+
+        var next = _settings.Copy();
+        next.ExcludedProcesses = list;
+        try
+        {
+            _store.Save(next);
+            _settings = next;
+            ExcludedProcessesText.Text = ProcessExclusion.FormatList(_settings.ExcludedProcesses);
+            SetStatus(removed
+                ? $"Процесс «{normalized}» удалён из исключений."
+                : $"Процесс «{normalized}» добавлен в исключения очистки.");
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Error("Не удалось обновить исключения процессов", ex);
+            SetStatus("Ошибка сохранения исключений: " + ex.Message);
+        }
+    }
 }

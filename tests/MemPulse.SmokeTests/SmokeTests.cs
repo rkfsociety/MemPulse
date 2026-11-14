@@ -241,4 +241,64 @@ public sealed class SmokeTests
         Assert.True(AutoCleanupPolicy.ShouldClean(91, 90, 15, now, now.AddMinutes(-15)));
         Assert.False(AutoCleanupPolicy.ShouldClean(double.NaN, 90, 15, now, DateTime.MinValue));
     }
+
+    [Fact]
+    public void ProcessExclusion_NormalizesAndMatchesCaseInsensitively()
+    {
+        var parsed = ProcessExclusion.ParseList(" chrome.exe, reaper ; CHROME , , game.EXE ");
+        Assert.Equal(["chrome", "reaper", "game"], parsed);
+        Assert.True(ProcessExclusion.IsExcluded("Chrome", parsed));
+        Assert.True(ProcessExclusion.IsExcluded("REAPER.exe", parsed));
+        Assert.False(ProcessExclusion.IsExcluded("notepad", parsed));
+        Assert.Equal("chrome, reaper, game", ProcessExclusion.FormatList(parsed));
+    }
+
+    [Fact]
+    public void CleanupHistoryLog_TracksFreedBytesAndCapacity()
+    {
+        var log = new CleanupHistoryLog(capacity: 2);
+        log.Record(new CleanupHistoryEntry(DateTimeOffset.Now, "Вручную", 1000, 700, true, "ok"));
+        log.Record(new CleanupHistoryEntry(DateTimeOffset.Now, "Авто", 2000, 1500, true, "ok"));
+        log.Record(new CleanupHistoryEntry(DateTimeOffset.Now, "Трей", 3000, 3100, true, "ok"));
+
+        Assert.Equal(2, log.Entries.Count);
+        Assert.Equal("Трей", log.Latest!.Reason);
+        Assert.Equal(-100, log.Latest.FreedBytes);
+        Assert.Equal(500, log.Entries[1].FreedBytes);
+    }
+
+    [Fact]
+    public void AutoCleanupPolicy_SmartModeRespectsFullscreenAndLowYield()
+    {
+        var now = DateTime.UtcNow;
+        Assert.False(AutoCleanupPolicy.ShouldCleanSmart(95, 90, 15, now, DateTime.MinValue, true, true, null));
+        Assert.True(AutoCleanupPolicy.ShouldCleanSmart(95, 90, 15, now, DateTime.MinValue, true, false, null));
+
+        // Low yield (< 32 MiB) doubles effective cooldown from 15 to 30 min.
+        Assert.False(AutoCleanupPolicy.ShouldCleanSmart(95, 90, 15, now, now.AddMinutes(-20), false, true, 5 * 1024 * 1024));
+        Assert.True(AutoCleanupPolicy.ShouldCleanSmart(95, 90, 15, now, now.AddMinutes(-30), false, true, 5 * 1024 * 1024));
+    }
+
+    [Fact]
+    public void ReleaseChecker_ParsesLinuxTarballFromReleaseJson()
+    {
+        const string json = """
+        {
+          "tag_name": "v9.9.9",
+          "html_url": "https://github.com/rkfsociety/MemPulse/releases/tag/v9.9.9",
+          "assets": [
+            {
+              "name": "MemPulse-linux-x64.tar.gz",
+              "browser_download_url": "https://github.com/rkfsociety/MemPulse/releases/download/v9.9.9/MemPulse-linux-x64.tar.gz"
+            }
+          ]
+        }
+        """;
+
+        var info = ReleaseChecker.ParseLatestLinuxRelease(json, new Version(0, 2, 37), "MemPulse-linux-x64.tar.gz");
+        Assert.NotNull(info);
+        Assert.Equal(new Version(9, 9, 9), info!.Version);
+        Assert.Equal("MemPulse-linux-x64.tar.gz", info.AssetName);
+        Assert.Null(ReleaseChecker.ParseLatestLinuxRelease(json, new Version(9, 9, 9), "MemPulse-linux-x64.tar.gz"));
+    }
 }

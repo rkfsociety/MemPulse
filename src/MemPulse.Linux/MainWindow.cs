@@ -28,6 +28,10 @@ public sealed class MainWindow : Window
     private readonly TextBlock _available = Metric();
     private readonly TextBlock _cache = Metric();
     private readonly TextBlock _total = Metric();
+    private readonly TextBlock _swapText = new() { Foreground = Muted, FontSize = 12, Text = "Swap: —" };
+    private readonly TextBlock _historyText = new() { Foreground = Muted, FontSize = 11, Text = "Последние очистки: нет", TextWrapping = TextWrapping.Wrap };
+    private readonly CleanupHistoryLog _cleanupHistory = new();
+    private ulong _lastUsedBytes;
     private readonly TextBlock _usagePercent = new() { Foreground = Highlight, FontSize = 25, FontWeight = FontWeight.Bold };
     private readonly TextBlock _processCount = new() { Foreground = Muted, FontSize = 12 };
     private readonly TextBlock _status = new() { Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap };
@@ -45,6 +49,15 @@ public sealed class MainWindow : Window
     private readonly Button _cleanButton = new() { Content = "Очистить файловый кэш (root)" };
     private readonly Button _applyButton = new() { Content = "Применить автоочистку" };
     private readonly CheckBox _autoBox = new() { Content = "Автоочистка" };
+    private readonly CheckBox _minimizeToTrayBox = new() { Content = "Сворачивать в трей" };
+    private readonly CheckBox _closeToTrayBox = new() { Content = "Скрывать в трей при закрытии" };
+    private readonly CheckBox _checkUpdatesBox = new() { Content = "Проверять обновления" };
+    private readonly Button _updateButton = new() { Content = "Обновления", VerticalAlignment = VerticalAlignment.Center };
+    private ReleaseInfo? _availableRelease;
+    private bool _checkingUpdates;
+    private TrayIcon? _trayIcon;
+    private bool _forceExit;
+    private bool _trayHintShown;
     private readonly NumericUpDown _threshold = new()
     {
         Minimum = 70, Maximum = 98, Increment = 1, Value = 90, FormatString = "0", Width = 72
@@ -53,6 +66,7 @@ public sealed class MainWindow : Window
     {
         Minimum = 5, Maximum = 120, Increment = 1, Value = 15, FormatString = "0", Width = 72
     };
+    private readonly TextBox _excludedBox = new() { Watermark = "Исключения процессов (через запятую)", Width = 320 };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _filterDebounce = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private const int ProcessPageSize = 100;
@@ -67,8 +81,42 @@ public sealed class MainWindow : Window
     {
         _settings = _settingsStore.Load();
         _autoBox.IsChecked = _settings.AutoClean;
+        _minimizeToTrayBox.IsChecked = _settings.MinimizeToTray;
+        _closeToTrayBox.IsChecked = _settings.CloseToTray;
+        _checkUpdatesBox.IsChecked = _settings.CheckForUpdates;
+        _minimizeToTrayBox.IsCheckedChanged += (_, _) =>
+        {
+            _settings.MinimizeToTray = _minimizeToTrayBox.IsChecked == true;
+            TrySaveSettings();
+        };
+        _closeToTrayBox.IsCheckedChanged += (_, _) =>
+        {
+            _settings.CloseToTray = _closeToTrayBox.IsChecked == true;
+            TrySaveSettings();
+        };
+        _checkUpdatesBox.IsCheckedChanged += (_, _) =>
+        {
+            _settings.CheckForUpdates = _checkUpdatesBox.IsChecked == true;
+            TrySaveSettings();
+            if (_settings.CheckForUpdates)
+                _ = CheckUpdatesAsync(manual: false);
+        };
+        StyleAction(_updateButton);
+        _updateButton.Click += async (_, _) => await UpdateButtonClickAsync();
         _threshold.Value = _settings.AutoCleanThreshold;
         _cooldown.Value = _settings.AutoCleanCooldownMinutes;
+        _excludedBox.Text = ProcessExclusion.FormatList(_settings.ExcludedProcesses);
+        _excludedBox.Background = Raised;
+        _excludedBox.Foreground = Text;
+        _excludedBox.BorderBrush = Stroke;
+        _excludedBox.BorderThickness = new Thickness(1);
+        _excludedBox.Padding = new Thickness(10, 6);
+        _excludedBox.LostFocus += (_, _) =>
+        {
+            _settings.ExcludedProcesses = ProcessExclusion.ParseList(_excludedBox.Text);
+            _excludedBox.Text = ProcessExclusion.FormatList(_settings.ExcludedProcesses);
+            TrySaveSettings();
+        };
         StyleAction(_cleanButton);
         StyleAction(_applyButton, primary: true);
         StyleAction(_clearFilter);
@@ -103,6 +151,11 @@ public sealed class MainWindow : Window
                 Refresh();
                 e.Handled = true;
             }
+            else if (e.Key == Key.M && e.KeyModifiers.HasFlag(KeyModifiers.Control | KeyModifiers.Alt))
+            {
+                _ = CleanAsync("Хоткей");
+                e.Handled = true;
+            }
         };
 
         Title = "MemPulse — Linux";
@@ -135,8 +188,15 @@ public sealed class MainWindow : Window
         var refresh = new Button { Content = "↻  Обновить", VerticalAlignment = VerticalAlignment.Center };
         StyleAction(refresh);
         refresh.Click += (_, _) => Refresh();
-        Grid.SetColumn(refresh, 1);
-        titleLine.Children.Add(refresh);
+        var titleActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _updateButton, refresh }
+        };
+        Grid.SetColumn(titleActions, 1);
+        titleLine.Children.Add(titleActions);
         header.Children.Add(titleLine);
 
         var metrics = new Grid
@@ -166,6 +226,7 @@ public sealed class MainWindow : Window
         overview.Children.Add(memoryHeading);
         overview.Children.Add(_usageBar);
         overview.Children.Add(metrics);
+        overview.Children.Add(_swapText);
         header.Children.Add(new Border
         {
             Background = Surface, BorderBrush = Stroke, BorderThickness = new Thickness(1),
@@ -184,7 +245,8 @@ public sealed class MainWindow : Window
                 {
                     Text = "Требуется подтверждение прав через polkit.",
                     Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap
-                }
+                },
+                _historyText
             }
         });
         _cleanButton.Click += async (_, _) => await CleanAsync();
@@ -217,6 +279,23 @@ public sealed class MainWindow : Window
         _applyButton.Click += async (_, _) => await ApplyAutoSettingsAsync();
         controls.Children.Add(_applyButton);
         automatic.Children.Add(controls);
+        var excludeRow = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        excludeRow.Children.Add(new TextBlock
+        {
+            Text = "Исключения (whitelist):", Foreground = Muted, FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 4)
+        });
+        _excludedBox.Margin = new Thickness(0, 0, 0, 4);
+        excludeRow.Children.Add(_excludedBox);
+        automatic.Children.Add(excludeRow);
+        var trayRow = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        _minimizeToTrayBox.Margin = new Thickness(0, 0, 14, 4);
+        _closeToTrayBox.Margin = new Thickness(0, 0, 14, 4);
+        _checkUpdatesBox.Margin = new Thickness(0, 0, 0, 4);
+        trayRow.Children.Add(_minimizeToTrayBox);
+        trayRow.Children.Add(_closeToTrayBox);
+        trayRow.Children.Add(_checkUpdatesBox);
+        automatic.Children.Add(trayRow);
         automatic.Children.Add(new TextBlock
         {
             Text = "По умолчанию выключена. После разрешения polkit помощник действует только пока MemPulse открыт; при закрытии приложения он завершается. Linux сам управляет файловым кэшем, поэтому принудительный сброс не рекомендуется без необходимости.",
@@ -290,19 +369,58 @@ public sealed class MainWindow : Window
         shell.Children.Insert(0, footer);
 
         _timer.Tick += (_, _) => Refresh();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty &&
+                WindowState == WindowState.Minimized &&
+                _settings.MinimizeToTray &&
+                _trayIcon is not null)
+            {
+                Hide();
+                if (!_trayHintShown)
+                {
+                    _trayHintShown = true;
+                    LinuxNotifications.TrySend("MemPulse", "Приложение свёрнуто в системный трей.");
+                }
+            }
+        };
+        Closing += (_, e) =>
+        {
+            if (!_forceExit && _settings.CloseToTray && _trayIcon is not null)
+            {
+                e.Cancel = true;
+                Hide();
+                if (!_trayHintShown)
+                {
+                    _trayHintShown = true;
+                    LinuxNotifications.TrySend("MemPulse", "MemPulse продолжает мониторинг в трее.");
+                }
+            }
+        };
         Closed += (_, _) =>
         {
             _closed = true;
             _timer.Stop();
             _filterDebounce.Stop();
             _autoSession?.Dispose();
+            if (_trayIcon is not null)
+            {
+                _trayIcon.IsVisible = false;
+                _trayIcon.Dispose();
+                _trayIcon = null;
+            }
         };
+        if (!Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
+            InitializeTray();
         Refresh();
         _timer.Start();
         // A remembered enabled setting is re-authorized for every GUI session.
         if (_settings.AutoClean &&
             !Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
             Dispatcher.UIThread.Post(async () => await ApplyAutoSettingsAsync(), DispatcherPriority.Background);
+        if (_settings.CheckForUpdates &&
+            !Environment.GetCommandLineArgs().Contains("--startup-smoke-test", StringComparer.Ordinal))
+            Dispatcher.UIThread.Post(async () => await CheckUpdatesAsync(manual: false), DispatcherPriority.Background);
     }
 
     // The Linux graphical smoke test verifies the scrollable dashboard and
@@ -422,6 +540,19 @@ public sealed class MainWindow : Window
             _available.Text = Format.Bytes(snapshot.memory.Available);
             _cache.Text = Format.Bytes(snapshot.memory.Cache);
             _total.Text = Format.Bytes(snapshot.memory.Total);
+            _lastUsedBytes = snapshot.memory.Used;
+            string swapPart = snapshot.memory.SwapTotal > 0
+                ? $"Swap: {Format.Bytes(snapshot.memory.SwapUsed)} / {Format.Bytes(snapshot.memory.SwapTotal)} ({snapshot.memory.SwapUsedPercent:0}%)"
+                : "Swap: не настроен";
+            string zramPart = snapshot.memory.ZramTotal > 0
+                ? $" · Zram: {Format.Bytes(snapshot.memory.ZramUsed)} / {Format.Bytes(snapshot.memory.ZramTotal)}"
+                : "";
+            _swapText.Text = swapPart + zramPart;
+            if (_trayIcon is not null)
+            {
+                _trayIcon.ToolTipText =
+                    $"MemPulse · ОЗУ {snapshot.memory.UsedPercent:0}% ({Format.Bytes(snapshot.memory.Used)} / {Format.Bytes(snapshot.memory.Total)})";
+            }
             _groups = snapshot.groups;
             _processTotal = snapshot.total;
             RenderProcesses();
@@ -494,6 +625,25 @@ public sealed class MainWindow : Window
                         _expandedGroups.Remove(current.Name);
                     expander.Content = null;
                 };
+                var toggleExcludeItem = new MenuItem { Header = "Добавить в исключения" };
+                toggleExcludeItem.Click += (_, _) =>
+                {
+                    if (expander.Tag is ProcessGroupUsage current)
+                        ToggleLinuxProcessExclusion(current);
+                };
+                var menu = new ContextMenu();
+                menu.Items.Add(toggleExcludeItem);
+                menu.Opening += (_, _) =>
+                {
+                    if (expander.Tag is ProcessGroupUsage current)
+                    {
+                        bool excluded = ProcessExclusion.IsExcluded(current.Name, _settings.ExcludedProcesses);
+                        toggleExcludeItem.Header = excluded
+                            ? $"Убрать «{current.DisplayName}» из исключений"
+                            : $"Добавить «{current.DisplayName}» в исключения";
+                    }
+                };
+                expander.ContextMenu = menu;
             }
             else
             {
@@ -654,7 +804,8 @@ public sealed class MainWindow : Window
             var trim = new Button { Content = "Очистить PID", Margin = new Thickness(8, 0, 0, 0) };
             StyleAction(trim);
             int pid = member.Pid;
-            trim.Click += async (_, _) => await TrimAsync(pid, trim);
+            string procName = member.Name;
+            trim.Click += async (_, _) => await TrimAsync(pid, procName, trim);
             Grid.SetColumn(trim, 3);
             row.Children.Add(trim);
             details.Children.Add(row);
@@ -662,8 +813,33 @@ public sealed class MainWindow : Window
         return details;
     }
 
-    private async Task TrimAsync(int pid, Button button)
+    private void ToggleLinuxProcessExclusion(ProcessGroupUsage group)
     {
+        string normalized = ProcessExclusion.NormalizeName(group.Name);
+        if (normalized.Length == 0) return;
+
+        var list = ProcessExclusion.NormalizeList(_settings.ExcludedProcesses);
+        bool removed = list.RemoveAll(item => item.Equals(normalized, StringComparison.OrdinalIgnoreCase)) > 0;
+        if (!removed)
+            list.Add(normalized);
+
+        _settings.ExcludedProcesses = list;
+        _excludedBox.Text = ProcessExclusion.FormatList(list);
+        TrySaveSettings();
+        _operationStatus = removed
+            ? $"Процесс «{normalized}» удалён из исключений."
+            : $"Процесс «{normalized}» добавлен в исключения.";
+        _status.Text = _operationStatus;
+    }
+
+    private async Task TrimAsync(int pid, string processName, Button button)
+    {
+        if (ProcessExclusion.IsExcluded(processName, _settings.ExcludedProcesses))
+        {
+            _operationStatus = $"Процесс «{processName}» находится в списке исключений.";
+            _status.Text = _operationStatus;
+            return;
+        }
         if (!LinuxProcfs.TryReadStartTicks(pid, out ulong startTicks))
         {
             _operationStatus = "Процесс " + pid + " завершился. Обновите список.";
@@ -682,14 +858,30 @@ public sealed class MainWindow : Window
         finally { button.IsEnabled = true; }
     }
 
-    private async Task CleanAsync()
+    private async Task CleanAsync(string reason = "Вручную")
     {
         _cleanButton.IsEnabled = false;
         _status.Text = "Ожидание подтверждения привилегий Linux…";
         try
         {
+            ulong usedBefore = _lastUsedBytes;
             var (success, message) = await LinuxCleanupService.RequestCacheDropAsync();
+            ulong usedAfter = usedBefore;
+            try { usedAfter = _procfs.ReadMemory().Used; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { }
+
+            _cleanupHistory.Record(new CleanupHistoryEntry(
+                DateTimeOffset.Now,
+                reason,
+                usedBefore,
+                usedAfter,
+                success,
+                message));
+            _historyText.Text = "Последние очистки: " + string.Join("  |  ", _cleanupHistory.Entries.Take(3).Select(e => e.DisplayLine));
+
             _operationStatus = (success ? "✓ " : "✕ ") + message;
+            if (success)
+                LinuxNotifications.TrySend("MemPulse — очистка завершена", _cleanupHistory.Latest?.DisplayLine ?? message);
             Refresh();
         }
         finally { _cleanButton.IsEnabled = true; }
@@ -707,6 +899,8 @@ public sealed class MainWindow : Window
             _settings.AutoCleanThreshold = Math.Clamp(threshold, 70, 98);
             _settings.AutoCleanCooldownMinutes = Math.Clamp(cooldown, 5, 120);
             _settings.AutoClean = _autoBox.IsChecked == true;
+            _settings.ExcludedProcesses = ProcessExclusion.ParseList(_excludedBox.Text);
+            _excludedBox.Text = ProcessExclusion.FormatList(_settings.ExcludedProcesses);
             if (_settings.AutoClean)
             {
                 _status.Text = "Ожидание разрешения polkit для автоочистки…";
@@ -733,6 +927,125 @@ public sealed class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _operationStatus += " Не удалось сохранить настройки: " + ex.Message;
+        }
+    }
+
+    private void InitializeTray()
+    {
+        try
+        {
+            string iconPath = Path.Combine(AppContext.BaseDirectory, "MemPulse.png");
+            var menu = new NativeMenu();
+
+            var openItem = new NativeMenuItem("Открыть MemPulse");
+            openItem.Click += (_, _) => Dispatcher.UIThread.Post(ShowFromTray);
+            menu.Items.Add(openItem);
+
+            var cleanItem = new NativeMenuItem("Очистить файловый кэш (root)");
+            cleanItem.Click += (_, _) => Dispatcher.UIThread.Post(async () => await CleanAsync("Трей"));
+            menu.Items.Add(cleanItem);
+
+            menu.Items.Add(new NativeMenuItemSeparator());
+
+            var exitItem = new NativeMenuItem("Выход");
+            exitItem.Click += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                _forceExit = true;
+                Close();
+            });
+            menu.Items.Add(exitItem);
+
+            _trayIcon = new TrayIcon
+            {
+                ToolTipText = "MemPulse — мониторинг памяти",
+                Menu = menu,
+                IsVisible = true
+            };
+            if (File.Exists(iconPath))
+                _trayIcon.Icon = new WindowIcon(iconPath);
+
+            _trayIcon.Clicked += (_, _) => Dispatcher.UIThread.Post(ShowFromTray);
+            if (Application.Current is not null)
+                TrayIcon.SetIcons(Application.Current, new TrayIcons { _trayIcon });
+        }
+        catch (Exception ex)
+        {
+            _operationStatus = "Системный трей недоступен: " + ex.Message;
+        }
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+        Refresh();
+    }
+
+    private async Task UpdateButtonClickAsync()
+    {
+        if (_availableRelease is null)
+        {
+            await CheckUpdatesAsync(manual: true);
+            return;
+        }
+        Uri target = _availableRelease.AssetUrl ?? _availableRelease.ReleaseUrl;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", target.AbsoluteUri)
+            {
+                UseShellExecute = false
+            });
+            _operationStatus = $"Открыта страница загрузки MemPulse v{_availableRelease.Version}.";
+            _status.Text = _operationStatus;
+        }
+        catch (Exception ex)
+        {
+            _operationStatus = $"Не удалось открыть ссылку ({target}): {ex.Message}";
+            _status.Text = _operationStatus;
+        }
+    }
+
+    private async Task CheckUpdatesAsync(bool manual)
+    {
+        if (_checkingUpdates || _closed) return;
+        _checkingUpdates = true;
+        _updateButton.IsEnabled = false;
+        try
+        {
+            var release = await ReleaseChecker.CheckLatestLinuxAsync();
+            if (_closed) return;
+            _availableRelease = release;
+            if (release is not null)
+            {
+                _updateButton.Content = $"Скачать v{release.Version}";
+                StyleAction(_updateButton, primary: true);
+                _operationStatus = $"Доступно обновление MemPulse v{release.Version} ({release.AssetName ?? "GitHub Releases"}).";
+                _status.Text = _operationStatus;
+                if (!manual)
+                    LinuxNotifications.TrySend("Доступно обновление MemPulse", $"Вышла версия v{release.Version}.");
+            }
+            else if (manual)
+            {
+                _updateButton.Content = "Обновления";
+                StyleAction(_updateButton, primary: false);
+                _operationStatus = $"Установлена актуальная версия MemPulse (v{ReleaseChecker.CurrentVersion}).";
+                _status.Text = _operationStatus;
+            }
+        }
+        catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            if (manual && !_closed)
+            {
+                _operationStatus = "Не удалось проверить обновления: " + ex.Message;
+                _status.Text = _operationStatus;
+            }
+        }
+        finally
+        {
+            _checkingUpdates = false;
+            _updateButton.IsEnabled = true;
         }
     }
 }

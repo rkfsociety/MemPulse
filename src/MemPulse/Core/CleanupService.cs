@@ -1,7 +1,9 @@
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
+using System.Text.Json;
 
 namespace MemPulse.Core;
 
@@ -35,6 +37,12 @@ public sealed class CleanupService
         if (IsElevated) return CleanElevated(options);
         var args = "--clean-cache" + (options.Standby ? " --standby" : "") +
             (options.WorkingSets ? " --workingsets" : "") + (options.ModifiedPages ? " --modified" : "");
+        if (options.WorkingSets && options.ExcludedProcesses is { Count: > 0 })
+        {
+            string json = JsonSerializer.Serialize(ProcessExclusion.NormalizeList(options.ExcludedProcesses));
+            string b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+            args += " --exclude-b64 " + b64;
+        }
         return RunHelper(args, "Очистка памяти", helperTimeout, cancellationToken);
     }
 
@@ -113,9 +121,27 @@ public sealed class CleanupService
         else
         {
             bool Has(string f) => args.Contains(f, StringComparer.OrdinalIgnoreCase);
-            report = svc.CleanElevated(new CleanupOptions(Has("--standby"), Has("--workingsets"), Has("--modified")));
+            IReadOnlyList<string>? excluded = ParseExcludedArg(args);
+            report = svc.CleanElevated(new CleanupOptions(Has("--standby"), Has("--workingsets"), Has("--modified"), excluded));
         }
         return report.Steps.Count > 0 && report.Steps.All(s => s.Success) ? 0 : 1;
+    }
+
+    private static IReadOnlyList<string>? ParseExcludedArg(string[] args)
+    {
+        int idx = Array.FindIndex(args, a => a.Equals("--exclude-b64", StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 || idx + 1 >= args.Length)
+            return null;
+        try
+        {
+            byte[] bytes = Convert.FromBase64String(args[idx + 1]);
+            var list = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(bytes));
+            return list is { Count: > 0 } ? ProcessExclusion.NormalizeList(list) : null;
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            return null;
+        }
     }
 
     public static bool IsHelperMode(string[] args) =>
@@ -136,9 +162,64 @@ public sealed class CleanupService
             return report;
         }
         if (options.Standby) Run(report, 4, "Кэш ожидания");
-        if (options.WorkingSets) Run(report, 2, "Рабочие наборы процессов");
+        if (options.WorkingSets)
+        {
+            if (options.ExcludedProcesses is { Count: > 0 })
+                TrimAllWorkingSetsExcept(report, options.ExcludedProcesses);
+            else
+                Run(report, 2, "Рабочие наборы процессов");
+        }
         if (options.ModifiedPages) Run(report, 3, "Изменённые страницы");
         return report;
+    }
+
+    private static void TrimAllWorkingSetsExcept(CleanupReport report, IReadOnlyList<string> excluded)
+    {
+        int selfPid = Environment.ProcessId;
+        int trimmed = 0;
+        int skipped = 0;
+
+        foreach (var proc in Process.GetProcesses())
+        {
+            using (proc)
+            {
+                try
+                {
+                    int pid = proc.Id;
+                    if (pid <= 4 || pid == selfPid)
+                        continue;
+
+                    if (ProcessExclusion.IsExcluded(proc.ProcessName, excluded))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    IntPtr handle = Native.OpenProcess(ProcessSetQuota | ProcessQueryLimitedInformation, false, pid);
+                    if (handle == IntPtr.Zero)
+                        continue;
+
+                    try
+                    {
+                        if (Native.EmptyWorkingSet(handle))
+                            trimmed++;
+                    }
+                    finally
+                    {
+                        Native.CloseHandle(handle);
+                    }
+                }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+                {
+                    // Protected or exiting processes may deny inspection.
+                }
+            }
+        }
+
+        report.Steps.Add(new CleanupStep(
+            "Рабочие наборы процессов",
+            true,
+            $"Очищено: {trimmed}, исключено: {skipped}."));
     }
 
     public CleanupReport TrimProcess(

@@ -204,4 +204,28 @@ CommitLimit:     9500000 kB
         Assert.True(LinuxProcfs.TryReadStartTicks(Environment.ProcessId, out var liveStart));
         Assert.True(liveStart > 0);
     }
+
+    [Fact]
+    public void LinuxProcfs_ParsesSwapAndZram()
+    {
+        const string meminfo = """
+        MemTotal:       16384000 kB
+        MemAvailable:    8192000 kB
+        Cached:          1024000 kB
+        SwapTotal:       4194304 kB
+        SwapFree:        3145728 kB
+        """;
+        var memory = LinuxProcfs.ParseMemInfo(meminfo);
+        Assert.Equal(4194304UL * 1024, memory.SwapTotal);
+        Assert.Equal(1048576UL * 1024, memory.SwapUsed);
+
+        const string swaps = """
+        Filename				Type		Size		Used		Priority
+        /dev/zram0                              partition	4194300		524288		100
+        /swapfile                               file		2097148		0		-2
+        """;
+        var (zramTotal, zramUsed) = LinuxProcfs.ParseProcSwapsZram(swaps);
+        Assert.Equal(4194300UL * 1024, zramTotal);
+        Assert.Equal(524288UL * 1024, zramUsed);
+    }
 }

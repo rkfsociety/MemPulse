@@ -332,12 +332,18 @@
                     </Grid>
                     <DataGrid x:Name="ProcessGrid" Background="{StaticResource PanelBrush}" Grid.Row="2" AutoGenerateColumns="False"
                               SelectionChanged="ProcessGrid_SelectionChanged" RowHeaderWidth="0"
+                              ContextMenuOpening="ProcessGrid_ContextMenuOpening"
                               AlternationCount="2" ScrollViewer.CanContentScroll="True"
                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ScrollViewer.IsDeferredScrollingEnabled="True"
                               RowStyle="{StaticResource ProcessRowStyle}" RowHeight="49"
                               ColumnHeaderHeight="39">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="OverviewExcludeMenuItem" Header="Добавить в исключения" Click="ToggleExcludeOverview_Click"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="ПРОЦЕСС" Width="*" SortMemberPath="Name">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -437,10 +443,18 @@
                             </DockPanel>
                             <ProgressBar x:Name="CommitBar" Height="5" Minimum="0"
                                          Maximum="100" Margin="0,10,0,0"/>
+                            <TextBlock x:Name="PageFileText" Text="Файл подкачки: —"
+                                       Style="{StaticResource MutedText}" FontSize="11" Margin="0,8,0,0"/>
                         </StackPanel>
                     </Grid>
                     <Border Grid.Row="2" Height="1" Background="{StaticResource BorderBrushApp}"
-                            Margin="0,19,0,16"/>
+                            Margin="0,16,0,14"/>
+                    <StackPanel Grid.Row="3" VerticalAlignment="Top">
+                        <TextBlock Text="ПОСЛЕДНИЕ ОЧИСТКИ" Style="{StaticResource CardLabel}"/>
+                        <TextBlock x:Name="CleanupHistoryText" Text="Очисток в этой сессии ещё не было."
+                                   Style="{StaticResource MutedText}" FontSize="11" Margin="0,6,0,0"
+                                   TextWrapping="Wrap" LineHeight="18"/>
+                    </StackPanel>
                     <Grid Grid.Row="4">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -489,11 +503,17 @@
    </Grid>
    <DataGrid x:Name="GroupGrid" Grid.Row="2" AutoGenerateColumns="False" RowHeaderWidth="0" RowHeight="49"
              Background="{StaticResource PanelBrush}" Foreground="{StaticResource TextBrush}"
+             ContextMenuOpening="GroupGrid_ContextMenuOpening"
              RowStyle="{StaticResource ProcessRowStyle}" RowDetailsVisibilityMode="VisibleWhenSelected"
              ColumnHeaderHeight="38" ScrollViewer.CanContentScroll="True"
              EnableRowVirtualization="True" EnableColumnVirtualization="True"
              VirtualizingPanel.VirtualizationMode="Recycling"
              ScrollViewer.IsDeferredScrollingEnabled="True">
+    <DataGrid.ContextMenu>
+     <ContextMenu>
+      <MenuItem x:Name="DetailExcludeMenuItem" Header="Добавить в исключения" Click="ToggleExcludeDetail_Click"/>
+     </ContextMenu>
+    </DataGrid.ContextMenu>
     <DataGrid.RowDetailsTemplate>
      <DataTemplate>
       <Border Background="#142936" Padding="14,13" Margin="0,0,0,6" BorderBrush="#31505B" BorderThickness="0,1,0,1">
@@ -571,6 +591,7 @@
          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
           <TextBlock Foreground="{StaticResource TextBrush}" Text="Пауза, мин." VerticalAlignment="Center"/><TextBox x:Name="CooldownText" Grid.Column="1" TextAlignment="Center" MaxLength="3"/>
          </Grid>
+         <CheckBox x:Name="SkipFullscreenCheck" Content="Не запускать в полноэкранном режиме" Margin="0,12,0,0" ToolTip="Пропускать автоочистку во время игр и полноэкранного видео"/>
          <TextBlock x:Name="AutoCleanElevationHint" Text="Автоочистка выполняется только с правами администратора." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,13,0,0"/>
         </StackPanel>
        </Border>
@@ -582,12 +603,20 @@
          <CheckBox x:Name="StartupCheck" Content="Запускать вместе с Windows"/>
          <CheckBox x:Name="MinimizeCheck" Content="Сворачивать в трей"/>
          <CheckBox x:Name="CloseCheck" Content="При закрытии скрывать в трей"/>
+         <CheckBox x:Name="HotkeyCheck" Content="Горячая клавиша Ctrl+Alt+M для очистки"/>
         </StackPanel>
        </Border>
        <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12" Margin="0,15,0,0">
         <StackPanel>
          <TextBlock Foreground="{StaticResource TextBrush}" Text="Обновления" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
          <CheckBox x:Name="UpdateCheck" Content="Автоматически проверять обновления"/>
+        </StackPanel>
+       </Border>
+       <Border Padding="19" Background="#172B37" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="12" Margin="0,15,0,0">
+        <StackPanel>
+         <TextBlock Foreground="{StaticResource TextBrush}" Text="Исключения процессов" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+         <TextBlock Text="Процессы через запятую (например, game, reaper, chrome), которые пропускаются при очистке рабочих наборов:" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+         <TextBox x:Name="ExcludedProcessesText" Height="64" TextWrapping="Wrap" AcceptsReturn="True" VerticalContentAlignment="Top" Padding="10,8"/>
         </StackPanel>
        </Border>
       </StackPanel>

@@ -2,10 +2,20 @@ using System.Globalization;
 
 namespace MemPulse.Core;
 
-public sealed record MemoryUsage(ulong Total, ulong Available, ulong Cache, ulong Committed, ulong CommitLimit)
+public sealed record MemoryUsage(
+    ulong Total,
+    ulong Available,
+    ulong Cache,
+    ulong Committed,
+    ulong CommitLimit,
+    ulong SwapTotal = 0,
+    ulong SwapUsed = 0,
+    ulong ZramTotal = 0,
+    ulong ZramUsed = 0)
 {
     public ulong Used => Total >= Available ? Total - Available : 0;
     public double UsedPercent => Total == 0 ? 0 : Math.Clamp((double)Used / Total * 100, 0, 100);
+    public double SwapUsedPercent => SwapTotal == 0 ? 0 : Math.Clamp((double)SwapUsed / SwapTotal * 100, 0, 100);
 }
 
 public sealed record ProcessUsage(int Pid, string Name, long WorkingBytes, long PrivateBytes)
@@ -67,8 +77,16 @@ public sealed class AppSettings
     public bool MinimizeToTray { get; set; } = true;
     public bool CloseToTray { get; set; }
     public bool CheckForUpdates { get; set; } = true;
+    public bool GlobalHotkeyEnabled { get; set; } = true;
+    public bool SkipAutoCleanInFullscreen { get; set; } = true;
+    public List<string> ExcludedProcesses { get; set; } = [];
 
-    public AppSettings Copy() => (AppSettings)MemberwiseClone();
+    public AppSettings Copy()
+    {
+        var copy = (AppSettings)MemberwiseClone();
+        copy.ExcludedProcesses = ProcessExclusion.NormalizeList(ExcludedProcesses);
+        return copy;
+    }
 
     public static AppSettings Normalize(AppSettings? settings)
     {
@@ -76,11 +94,16 @@ public sealed class AppSettings
         result.RefreshSeconds = Math.Clamp(result.RefreshSeconds, 1, 10);
         result.AutoCleanThreshold = Math.Clamp(result.AutoCleanThreshold, AutoCleanupPolicy.MinThreshold, AutoCleanupPolicy.MaxThreshold);
         result.AutoCleanCooldownMinutes = Math.Clamp(result.AutoCleanCooldownMinutes, AutoCleanupPolicy.MinCooldownMinutes, AutoCleanupPolicy.MaxCooldownMinutes);
+        result.ExcludedProcesses = ProcessExclusion.NormalizeList(result.ExcludedProcesses);
         return result;
     }
 }
 
-public sealed record CleanupOptions(bool Standby, bool WorkingSets, bool ModifiedPages);
+public sealed record CleanupOptions(
+    bool Standby,
+    bool WorkingSets,
+    bool ModifiedPages,
+    IReadOnlyList<string>? ExcludedProcesses = null);
 public sealed record CleanupStep(string Name, bool Success, string Details);
 
 public sealed class CleanupReport

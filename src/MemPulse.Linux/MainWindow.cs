@@ -66,7 +66,7 @@ public sealed class MainWindow : Window
     {
         Minimum = 5, Maximum = 120, Increment = 1, Value = 15, FormatString = "0", Width = 72
     };
-    private readonly TextBox _excludedBox = new() { Watermark = "Исключения процессов (через запятую)", Width = 320 };
+    private readonly TextBox _excludedBox = new() { PlaceholderText = "Исключения процессов (через запятую)", Width = 320 };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _filterDebounce = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private const int ProcessPageSize = 100;

@@ -244,9 +244,9 @@ public sealed class UpdateService
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
-        char[] buffer = new char[MaxChecksumFileBytes];
+        char[] buffer = new char[MaxChecksumFileBytes + 1];
         int read = await reader.ReadBlockAsync(buffer.AsMemory(), cancellationToken);
-        if (!reader.EndOfStream)
+        if (read > MaxChecksumFileBytes)
             throw new InvalidDataException("Файл контрольной суммы слишком велик.");
         return new string(buffer, 0, read);
     }

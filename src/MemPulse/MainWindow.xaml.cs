@@ -1090,7 +1090,7 @@ public partial class MainWindow : Window
     private void GroupGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) =>
         UpdateExcludeMenuItem(GroupGrid.SelectedItem as ProcessGroupUsage, DetailExcludeMenuItem, e);
 
-    private void UpdateExcludeMenuItem(ProcessGroupUsage? group, MenuItem item, ContextMenuEventArgs e)
+    private void UpdateExcludeMenuItem(ProcessGroupUsage? group, System.Windows.Controls.MenuItem item, ContextMenuEventArgs e)
     {
         if (group is null)
         {

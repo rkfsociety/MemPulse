@@ -274,7 +274,7 @@ public partial class MainWindow : Window
 
             UsedText.Text = Format.Bytes(memory.Used);
             PercentText.Text = memory.UsedPercent.ToString("0") + "%";
-            TotalText.Text = Format.Bytes(memory.Total) + " всего";
+            TotalText.Text = Format.Bytes(memory.Total);
             UpdateMemoryVisual(memory.UsedPercent);
             SideUsageText.Text = memory.UsedPercent.ToString("0") + "%";
             SideUsageBar.Value = memory.UsedPercent;
@@ -854,16 +854,19 @@ public partial class MainWindow : Window
         ProcessesPage.Visibility = section == Section.Processes ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = section == Section.Settings ? Visibility.Visible : Visibility.Collapsed;
         AboutPage.Visibility = section == Section.About ? Visibility.Visible : Visibility.Collapsed;
+        var activeNavBorder = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x2C, 0x6B, 0x6A));
         foreach (var item in new (Button button, Section page)[]
         {
             (OverviewNav, Section.Overview), (ProcessesNav, Section.Processes),
             (SettingsNav, Section.Settings), (AboutNav, Section.About)
         })
         {
+            bool active = item.page == section;
             item.button.Background = (System.Windows.Media.Brush)FindResource(
-                item.page == section ? "SelectedNavBrush" : "TransparentNavBrush");
+                active ? "SelectedNavBrush" : "TransparentNavBrush");
             item.button.Foreground = (System.Windows.Media.Brush)FindResource(
-                item.page == section ? "AccentBrush" : "TextBrush");
+                active ? "AccentBrush" : "TextBrush");
+            item.button.BorderBrush = active ? activeNavBorder : System.Windows.Media.Brushes.Transparent;
         }
         if (section == Section.Settings) LoadSettingsControls();
     }
@@ -1008,10 +1011,18 @@ public partial class MainWindow : Window
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
+    private void Maximize_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Window_StateChanged(object sender, EventArgs e)
     {
+        bool maximized = WindowState == WindowState.Maximized;
+        RootLayout.Margin = maximized ? new Thickness(7) : new Thickness(0);
+        MaximizeButton.Content = maximized ? "❐" : "□";
+        MaximizeButton.ToolTip = maximized ? "Восстановить" : "Развернуть";
+
         if (WindowState == WindowState.Minimized && _settings.MinimizeToTray && _tray is not null)
             Hide();
         else if (WindowState != WindowState.Minimized && IsVisible && _processesStale)
@@ -1054,6 +1065,12 @@ public partial class MainWindow : Window
         AutoCleanStateText.Text = _settings.AutoClean ? "Включена" : "Отключена";
         AutoCleanStateText.Foreground = (System.Windows.Media.Brush)FindResource(
             _settings.AutoClean ? "AccentBrush" : "MutedBrush");
+        AutoCleanBadge.Background = new SolidColorBrush(_settings.AutoClean
+            ? System.Windows.Media.Color.FromRgb(0x15, 0x3D, 0x3B)
+            : System.Windows.Media.Color.FromRgb(0x19, 0x34, 0x3E));
+        AutoCleanBadge.BorderBrush = new SolidColorBrush(_settings.AutoClean
+            ? System.Windows.Media.Color.FromRgb(0x26, 0x5E, 0x5A)
+            : System.Windows.Media.Color.FromRgb(0x29, 0x4A, 0x57));
         AutoCleanThresholdText.Text =
             $"Порог: {_settings.AutoCleanThreshold}% · пауза: {_settings.AutoCleanCooldownMinutes} мин.";
     }
@@ -1067,7 +1084,10 @@ public partial class MainWindow : Window
         var color = value >= 90 ? System.Windows.Media.Color.FromRgb(255, 112, 120)
             : value >= 80 ? System.Windows.Media.Color.FromRgb(255, 199, 104)
             : System.Windows.Media.Color.FromRgb(46, 226, 193);
-        UsageArc.Stroke = new System.Windows.Media.SolidColorBrush(color);
+        var indicatorBrush = new SolidColorBrush(color);
+        UsageArc.Stroke = indicatorBrush;
+        SideUsageText.Foreground = indicatorBrush;
+        SideUsageBar.Foreground = indicatorBrush;
         if (value > 0 && value < 99.95)
         {
             const double radius = 74;
